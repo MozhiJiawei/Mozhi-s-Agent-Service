@@ -54,6 +54,20 @@ queued`.
 
 ## Implementation Notes
 
+- Iteration 1 infrastructure is currently available for HTTP-by-IP validation:
+  `http://39.105.78.135/health` returns `200 OK` through the ECS Caddy edge,
+  ECS `frps`, desktop `frpc`, and the desktop mock health service.
+- Domain HTTPS remains pending because ICP备案 is not complete. Until then,
+  external API validation should use the ECS public IP path instead of
+  `https://<domain>`.
+- Real FRP tokens and future service credentials must stay outside the
+  repository, following `docs/operations/secret-material.md`.
+  - Windows operator secrets are stored under
+    `%USERPROFILE%\.mozhi-agent-service\edge\`.
+  - ECS edge secrets are stored under `/etc/mozhi-agent-service/edge/.env`.
+- The next implementation should replace the mock desktop health service with
+  the real API service behind the same FRP/Caddy path, without moving request
+  handling or generation work onto the ECS instance.
 - Supported `source_type` values are `text`, `markdown`, `url`, and
   `pdf_reference`.
 - The Issue title should be derived from the request title and include enough

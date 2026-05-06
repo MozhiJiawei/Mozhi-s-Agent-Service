@@ -77,6 +77,36 @@ Delete the uploaded tar after `docker load` succeeds:
 rm mozhi-agent-service-edge-local.tar
 ```
 
+## Secret Material
+
+Follow the repository-wide secret handling rules in
+`docs/operations/secret-material.md`.
+
+Keep real tokens and keys out of this repository. Store them in fixed operator
+directories so local tests and ECS restarts do not depend on temporary files.
+
+Current fixed locations:
+
+```text
+Windows desktop:
+  %USERPROFILE%\.mozhi-agent-service\edge\frp-token.txt
+  %USERPROFILE%\.mozhi-agent-service\edge\frpc-ecs.toml
+  %USERPROFILE%\.mozhi-agent-service\edge\ecs-edge.env
+
+ECS host:
+  /etc/mozhi-agent-service/edge/.env
+```
+
+The ECS `.env` file should be owned by `root:root` and readable only by root:
+
+```bash
+chown root:root /etc/mozhi-agent-service/edge/.env
+chmod 600 /etc/mozhi-agent-service/edge/.env
+```
+
+The desktop `frpc` configuration and the ECS edge `.env` must use the same
+`FRP_TOKEN` value.
+
 ## Desktop frpc Mapping
 
 The desktop `frpc` should connect to the ECS public IP and expose the local
