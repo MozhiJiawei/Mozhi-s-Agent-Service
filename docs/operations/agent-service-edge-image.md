@@ -13,6 +13,9 @@ Caddy and `frps` inside one container.
 - Caddy for public HTTP/HTTPS termination.
 - FRP server (`frps`) for the outbound tunnel from the home desktop.
 - Runtime templates for Caddy and FRP configuration.
+- Public `/health` routing to the desktop API service through FRP.
+- HTTPS-only `/api/*` routing to the desktop API service through FRP, with an
+  edge request body limit.
 
 The image does not contain the briefing API, worker, Codex, PPT generation, real
 domain names, FRP tokens, certificates, or generated artifacts.
@@ -110,7 +113,8 @@ The desktop `frpc` configuration and the ECS edge `.env` must use the same
 ## Desktop frpc Mapping
 
 The desktop `frpc` should connect to the ECS public IP and expose the local
-desktop service to the same remote port used by Caddy:
+desktop API service to the same remote port used by Caddy. Once Iteration 2 is
+running, the local service should be the FastAPI app on `127.0.0.1:8080`:
 
 ```toml
 serverAddr = "39.105.78.135"
@@ -125,6 +129,19 @@ localIP = "127.0.0.1"
 localPort = 8080
 remotePort = 18081
 ```
+
+`DESKTOP_API_PROXY_PORT` defaults to `HEALTH_PROXY_PORT` for compatibility with
+the original health check tunnel. When `/health` and `/api/*` share the same
+desktop FastAPI service, both values may remain `18081`.
+
+`/api/*` carries bearer credentials and should not be used over the public
+HTTP-by-IP path. Keep HTTP-by-IP validation to `/health` until domain HTTPS is
+available.
+
+For a one-off public-IP HTTP E2E check before domain HTTPS is available, set
+`ALLOW_HTTP_API=true` on the ECS edge container and send
+`X-Mozhi-Allow-Http-Api: true` with the request. Do not share production tokens
+through this path; use a short-lived validation token only.
 
 ## Disk Notes
 

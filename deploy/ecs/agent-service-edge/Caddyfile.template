@@ -9,8 +9,24 @@ ${CADDY_SITE_ADDRESS} {
 		reverse_proxy 127.0.0.1:${HEALTH_PROXY_PORT}
 	}
 
+	@api_blocked_cleartext {
+		path /api/*
+		protocol http
+		not header X-Mozhi-Allow-Http-Api "${ALLOW_HTTP_API_HEADER_VALUE}"
+	}
+
+	handle @api_blocked_cleartext {
+		respond "API requires HTTPS" 426
+	}
+
+	handle /api/* {
+		request_body {
+			max_size ${API_MAX_BODY_SIZE}
+		}
+		reverse_proxy 127.0.0.1:${DESKTOP_API_PROXY_PORT}
+	}
+
 	handle {
 		respond "Mozhi Agent Service edge gateway" 404
 	}
 }
-

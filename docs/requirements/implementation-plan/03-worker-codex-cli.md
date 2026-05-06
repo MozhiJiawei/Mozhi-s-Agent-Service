@@ -47,9 +47,42 @@ worker milestone updates such as `running`, `generating`, and
 - `Mozhi-s-AgentWorkspace` is an external dependency, not a subtree or copied
   module of this repository.
 - Runtime scratch files belong outside this repository.
+- Service-owned runtime state and logs belong under this repository's `.tmp/`
+  directory and must not be committed. Secret files belong under
+  `%USERPROFILE%\.mozhi-agent-service\api\`. AgentWorkspace generation scratch
+  remains in `Mozhi-s-AgentWorkspace`, not this repository.
 - Issue updates are milestone-level to keep the status page readable.
 - Generation completion means Codex produced candidate outputs; it does not mean
   the job is completed or archived.
+
+## Iteration 2 Handoff State
+
+Iteration 2 is complete enough for the worker implementation to consume queued
+briefing requests:
+
+- The desktop API is implemented under `apps/api/` with `GET /health` and
+  `POST /api/briefings`.
+- `POST /api/briefings` accepts authenticated `text/plain` source material,
+  requires `X-Mozhi-Title`, and returns `202 Accepted` with `request_id`,
+  `issue_url`, and `status: queued`.
+- API secrets are loaded by `scripts/api/start-desktop-api.ps1` from
+  `%USERPROFILE%\.mozhi-agent-service\api\api-token.txt` and
+  `%USERPROFILE%\.mozhi-agent-service\api\github-token.txt`.
+- The default queued task store is `.tmp/api/tasks.jsonl`. The user-profile
+  secret directory must contain only secret files, not logs or task state.
+- Generated Issues use the default `agent-briefing` label, configurable through
+  `MOZHI_ISSUE_LABEL`.
+- The service uses UTC+8 timestamps in request IDs, health responses, task
+  records, and Issue bodies.
+- GitHub Issue creation uses `GITHUB_TOKEN` through the GitHub REST API when
+  present and falls back to authenticated `gh issue create` otherwise.
+- The ECS edge routes `/health` and `/api/*` to the desktop through FRP.
+  Production `/api/*` traffic should use HTTPS. Temporary public-IP HTTP E2E
+  checks require both `ALLOW_HTTP_API=true` on the edge and request header
+  `X-Mozhi-Allow-Http-Api: true`.
+- External E2E through ECS Caddy -> FRP -> desktop FastAPI -> GitHub Issue ->
+  JSONL task store was verified. Test Issues were later deleted after
+  validation.
 
 ## Implementation Notes
 
@@ -57,8 +90,11 @@ worker milestone updates such as `running`, `generating`, and
   as generation failures.
 - The worker should write enough internal logs for diagnosis while keeping GitHub
   Issue comments concise.
+- The worker should read queued records from `.tmp/api/tasks.jsonl` unless
+  `MOZHI_TASK_STORE_PATH` overrides it.
 - The task record should keep the path to the isolated runtime directory and any
-  candidate output files needed by later QA.
+  candidate output files needed by later QA. Worker-owned state may use
+  additional files under `.tmp/worker/` as long as they are ignored by Git.
 - The worker should be restart-safe enough that an interrupted task can be
   diagnosed and retried manually, even if automated retry is deferred.
 - The implementation should inspect `git status` before any future commit step

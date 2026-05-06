@@ -9,7 +9,7 @@ implement API routes, worker code, deployment scripts, or GitHub automation.
 
 ## Goals
 
-- Make the service reachable through a Tencent Cloud domain.
+- Make the service reachable through the Alibaba Cloud ECS edge gateway.
 - Accept briefing generation requests and return a GitHub Issue status page.
 - Run generation asynchronously through Codex CLI and the external
   `Mozhi-s-AgentWorkspace` repository.
@@ -18,12 +18,11 @@ implement API routes, worker code, deployment scripts, or GitHub automation.
 
 ## Key Decisions
 
-- The service runs on the user's home desktop machine, not on a purchased cloud
-  server.
-- The Tencent Cloud domain points directly to the home broadband public IP with
-  a DNS A record.
-- Tencent Cloud DNS API based DDNS keeps the A record current when the home
-  broadband IP changes.
+- The real API and worker processes run on the user's home desktop machine.
+- The Alibaba Cloud ECS instance is a stable public edge gateway, not the
+  application host.
+- ECS Caddy and FRP route public traffic to the desktop service through an
+  outbound desktop tunnel.
 - GitHub Issues are the external status page for all requests.
 - Issue updates use milestone-level comments rather than fine-grained runtime
   logs.
@@ -85,11 +84,11 @@ briefings/
 ## Shared Assumptions
 
 - The home desktop can stay online while the service is expected to work.
-- The home broadband connection has an inbound-reachable public IPv4 address.
-- The router can forward inbound traffic to the desktop.
-- Windows Firewall can be configured to allow the selected service port.
-- The domain can be managed through Tencent Cloud DNS.
+- The ECS edge gateway can reach the desktop service through FRP while the home
+  desktop is online.
+- Windows Firewall can allow the selected local service port.
+- Domain HTTPS can be enabled after ICP/domain requirements are complete; until
+  then, public IP HTTP validation is acceptable for iteration checks.
 - Codex CLI can run on the desktop and access `D:\Agent Repo\Mozhi-s-AgentWorkspace`.
 - The implementation may choose concrete frameworks and storage later, but must
   preserve the external behavior described in these iteration files.
-
