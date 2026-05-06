@@ -19,6 +19,8 @@ queued`.
 ## Scope
 
 - Implement the `POST /api/briefings` route under `apps/api/`.
+- Run the API service on the home desktop behind the ECS edge gateway established
+  in Iteration 1.
 - Accept the request shape defined in `docs/requirements/briefing-generation-api.md`.
 - Validate required fields and supported `source_type` values.
 - Generate a stable `request_id`.
@@ -40,6 +42,10 @@ queued`.
 
 - GitHub Issue is the public status page for the request.
 - The API must return before generation starts.
+- The public API is reached through the Alibaba Cloud ECS gateway, but the real
+  API process still runs on the home desktop.
+- The ECS instance should not store full request source content or run generation
+  work in this iteration.
 - Request validation errors should be returned synchronously.
 - PPT generation errors cannot occur in this iteration because generation is not
   executed yet.
@@ -57,13 +63,18 @@ queued`.
 - The initial Issue should include a concise "Current status: queued" section.
 - GitHub API failures should return a clear API error because the Issue URL is
   required for the external contract.
+- Public routing should preserve enough request context for diagnosis, including
+  method, path, status, and request ID, without logging full source content at
+  the ECS gateway.
 
 ## E2E Acceptance Test
 
 ### Preconditions
 
 - Iteration 1 is complete.
-- The API service is reachable through the public domain.
+- The API service is running on the home desktop.
+- The ECS Caddy and FRP stack routes `https://<domain>/api/briefings` to the
+  desktop API service.
 - The service has credentials to create Issues in this GitHub repository.
 - The task store is available.
 
@@ -90,6 +101,8 @@ queued`.
 
 - **Invalid request data:** return a validation response that identifies the
   invalid field.
+- **ECS gateway routing failure:** verify Caddy route configuration, FRP tunnel
+  status, and desktop API health before debugging application validation.
 - **GitHub credentials missing or invalid:** fail the request before queueing an
   orphaned task.
 - **Task is persisted but Issue creation fails:** avoid returning success unless
@@ -105,4 +118,3 @@ queued`.
 - The Issue starts in `queued`.
 - Invalid requests are rejected before Issue creation.
 - The API performs no synchronous generation work.
-

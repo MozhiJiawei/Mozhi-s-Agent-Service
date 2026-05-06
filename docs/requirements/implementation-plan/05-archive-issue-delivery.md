@@ -22,6 +22,8 @@ PPT, manifest, QA summary, and archive location.
 - Update the Issue to `completed`.
 - Add a final Issue comment with archive path, PPT link, manifest link, QA
   summary link, and commit or GitHub file links.
+- Keep the Alibaba Cloud ECS edge gateway out of the final artifact storage path
+  except for serving API/status traffic during the request lifecycle.
 
 ## Out of Scope
 
@@ -39,6 +41,9 @@ PPT, manifest, QA summary, and archive location.
   from Git LFS to object storage without changing API semantics.
 - The Issue is complete only when it links to the archived artifacts.
 - Failed jobs should end with clear Issue status, not partial archive delivery.
+- Final PPT download links should point to GitHub repository storage, Git LFS, or
+  a future object-storage backend rather than streaming large files through the
+  3 Mbps ECS gateway.
 
 ## Implementation Notes
 
@@ -52,12 +57,17 @@ PPT, manifest, QA summary, and archive location.
   place.
 - The final Issue comment should be concise but complete enough for a requester
   to retrieve the deliverables without reading local logs.
+- The ECS gateway can remain responsible for accepting future API requests, but
+  completed artifact retrieval should use the links recorded in the Issue and
+  `manifest.json`.
 
 ## E2E Acceptance Test
 
 ### Preconditions
 
 - Iterations 1 through 4 are complete.
+- The request entered through the Alibaba Cloud ECS gateway and was processed by
+  the home desktop worker.
 - A request can generate a QA-approved PPT.
 - The worker can write to the repository archive directory.
 - The repository storage policy for PPTX files is configured.
@@ -91,6 +101,8 @@ PPT, manifest, QA summary, and archive location.
 - **Archive path collision:** include the Issue number in the directory name.
 - **PPTX too large for normal Git storage:** use Git LFS and keep metadata in the
   manifest.
+- **ECS bandwidth too small for artifact delivery:** publish GitHub or future
+  object-storage links instead of using the gateway as a download server.
 - **Hash mismatch:** compute metadata only after files are placed in the final
   archive directory.
 - **Broken GitHub links:** verify final links from the Issue after commit or file
@@ -107,4 +119,3 @@ PPT, manifest, QA summary, and archive location.
   `qa-summary.md`.
 - Artifact metadata in `manifest.json` is correct.
 - The Issue is updated to `completed` and includes final delivery links.
-

@@ -14,6 +14,8 @@ worker milestone updates such as `running`, `generating`, and
 ## Scope
 
 - Implement asynchronous worker behavior under `apps/worker/`.
+- Run the worker on the home desktop, colocated with the external
+  `Mozhi-s-AgentWorkspace` dependency and the Codex CLI environment.
 - Claim queued tasks from the task store.
 - Update task state to `running` when a worker starts processing.
 - Add a GitHub Issue milestone comment when processing begins.
@@ -30,6 +32,8 @@ worker milestone updates such as `running`, `generating`, and
 
 - Reimplementing any `hw-ppt-gen` skill behavior in this repository.
 - Copying AgentWorkspace skill code into this repository.
+- Running Codex CLI, PPT generation, or worker execution on the Alibaba Cloud ECS
+  edge gateway.
 - Final QA policy.
 - Final archive creation.
 - Fine-grained streaming of every Codex tool call into the Issue.
@@ -37,6 +41,9 @@ worker milestone updates such as `running`, `generating`, and
 ## Key Decisions
 
 - Worker execution is asynchronous and decoupled from the HTTP request.
+- The home desktop remains the execution host for worker and Codex operations.
+- The Alibaba Cloud ECS instance remains only the public edge gateway and tunnel
+  server.
 - `Mozhi-s-AgentWorkspace` is an external dependency, not a subtree or copied
   module of this repository.
 - Runtime scratch files belong outside this repository.
@@ -56,12 +63,17 @@ worker milestone updates such as `running`, `generating`, and
   diagnosed and retried manually, even if automated retry is deferred.
 - The implementation should inspect `git status` before any future commit step
   to ensure scratch files were not placed in this repository.
+- Worker logs should distinguish application failures from ECS gateway or FRP
+  tunnel failures. A tunnel outage affects public request ingress but should not
+  be mistaken for a Codex generation failure.
 
 ## E2E Acceptance Test
 
 ### Preconditions
 
 - Iterations 1 and 2 are complete.
+- The public request enters through the Alibaba Cloud ECS gateway and reaches the
+  home desktop API service.
 - Codex CLI is installed on the desktop.
 - `D:\Agent Repo\Mozhi-s-AgentWorkspace` exists and contains the required PPT
   generation capability.
@@ -92,6 +104,9 @@ worker milestone updates such as `running`, `generating`, and
 
 - **Codex CLI missing:** fail with a clear Issue comment and internal log entry.
 - **AgentWorkspace path missing:** fail before attempting generation.
+- **Desktop offline after request queueing:** leave the task queued or mark it
+  failed according to the chosen task-store recovery policy; do not diagnose it
+  as an ECS failure unless the gateway is also unreachable.
 - **Generation timeout:** mark the task failed with timeout context.
 - **Unexpected output location:** record the observed output paths and fail the
   task if no candidate PPT can be found.
@@ -105,4 +120,3 @@ worker milestone updates such as `running`, `generating`, and
 - Codex CLI is invoked through the external AgentWorkspace.
 - No AgentWorkspace skill implementation or scratch files are copied into this
   repository.
-
