@@ -1,0 +1,11 @@
+dist/
+*.tar
+*.tar.gz
+*.tgz
+*.log
+.env
+.env.*
+!.env.example
+**/.tmp/
+**/tmp/
+

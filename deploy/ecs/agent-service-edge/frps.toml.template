@@ -1,0 +1,4 @@
+bindPort = ${FRP_BIND_PORT}
+auth.method = "token"
+auth.token = "${FRP_TOKEN}"
+

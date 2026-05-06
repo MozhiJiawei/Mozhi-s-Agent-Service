@@ -1,0 +1,20 @@
+services:
+  edge:
+    image: mozhi-agent-service-edge:local
+    container_name: mozhi-agent-service-edge
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${FRP_BIND_PORT:-7000}:${FRP_BIND_PORT:-7000}"
+    environment:
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
+      FRP_TOKEN: "${FRP_TOKEN:?FRP_TOKEN is required}"
+      FRP_BIND_PORT: "${FRP_BIND_PORT:-7000}"
+      HEALTH_PROXY_PORT: "${HEALTH_PROXY_PORT:-18081}"
+    volumes:
+      - mozhi-caddy-data:/data
+
+volumes:
+  mozhi-caddy-data:
+

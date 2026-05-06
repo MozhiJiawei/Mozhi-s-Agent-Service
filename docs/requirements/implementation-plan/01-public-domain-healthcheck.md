@@ -78,6 +78,54 @@ desktop through the ECS gateway.
   ECS security group, Docker Compose service status, Caddy certificate status,
   FRP client/server logs, and the local desktop service.
 
+## Current Progress
+
+- Added an ECS edge Docker image delivery under
+  `deploy/ecs/agent-service-edge/`.
+  - The image is built from `ubuntu:24.04` for compatibility with the ECS Ubuntu
+    24.04 64-bit host.
+  - The image packages Caddy and FRP server (`frps`) in one container.
+  - Runtime templates generate Caddy and `frps` configuration from environment
+    variables; real domain names, tokens, certificates, and ECS credentials are
+    not committed.
+- Added repository-managed scripts under `scripts/ecs/`.
+  - `build-agent-service-edge-image.ps1` builds
+    `mozhi-agent-service-edge:local` with Docker Desktop.
+  - `test-local-edge-image.ps1` verifies the local edge path.
+  - `save-agent-service-edge-image.ps1` exports the image tar for manual upload
+    and `docker load` on ECS.
+  - `stop-local-edge-image-test.ps1` cleans up the local verification stack.
+- Built the local `mozhi-agent-service-edge:local` image successfully on the
+  Windows desktop with platform `linux/amd64`.
+  - The generated image matches the ECS server architecture
+    (`x86_64`/`amd64`).
+  - The local image size is approximately 175 MB.
+- Verified the local edge chain with Docker Desktop.
+  - The test starts one edge container locally.
+  - The mock desktop `/health` service runs as a host-side Python process.
+  - A temporary `frpc` process runs inside the same edge container for local
+    tunnel verification.
+  - `http://localhost:18080/health` returned `200 OK` and identified the mock
+    desktop service.
+  - Stopping temporary `frpc` produced a visible `502 Bad Gateway`; restarting
+    it restored the health response.
+- Added `docs/operations/agent-service-edge-image.md` with local build, local
+  verification, ECS `docker load`, runtime environment, and disk hygiene notes.
+- Added temporary long-running local preview scripts under `.tmp/` for manual
+  browser inspection; these are scratch helpers and are intentionally excluded
+  from Git.
+
+Remaining work for this iteration:
+
+- Export the edge image tar and upload it to ECS.
+- Install or verify Docker on the ECS Ubuntu 24.04 host.
+- Load and run `mozhi-agent-service-edge:local` on ECS with real `DOMAIN`,
+  `FRP_TOKEN`, `FRP_BIND_PORT`, and `HEALTH_PROXY_PORT` values.
+- Configure DNS A record for `<domain>` to `39.105.78.135`.
+- Configure the ECS security group for SSH, HTTP, HTTPS, and FRP.
+- Run the real desktop-side `frpc` and real desktop `/health` service.
+- Validate `https://<domain>/health` from outside the home network.
+
 ## E2E Acceptance Test
 
 ### Preconditions

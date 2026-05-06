@@ -1,0 +1,16 @@
+{
+	admin off
+}
+
+${CADDY_SITE_ADDRESS} {
+	encode zstd gzip
+
+	handle /health {
+		reverse_proxy 127.0.0.1:${HEALTH_PROXY_PORT}
+	}
+
+	handle {
+		respond "Mozhi Agent Service edge gateway" 404
+	}
+}
+

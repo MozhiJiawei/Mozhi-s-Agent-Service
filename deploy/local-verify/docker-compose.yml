@@ -1,0 +1,13 @@
+services:
+  edge:
+    image: ${EDGE_IMAGE:-mozhi-agent-service-edge:local}
+    container_name: mozhi-edge-local
+    environment:
+      FRP_TOKEN: ${FRP_TOKEN:-local-dev-token}
+      FRP_BIND_PORT: 7000
+      HEALTH_PROXY_PORT: 18081
+      CADDY_SITE_ADDRESS: ":80"
+    ports:
+      - "18080:80"
+      - "7000:7000"
+      - "18081:18081"
