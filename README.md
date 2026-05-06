@@ -54,3 +54,25 @@ copy only final, curated artifacts back into this repository.
 The first implementation stage initializes the repository and records the
 aligned requirements for the briefing generation API. API and worker code will
 be added in later implementation stages.
+
+## Runtime Files And Secrets
+
+Agents and operators must keep secret material separate from runtime scratch
+files:
+
+- Store API secrets only under
+  `%USERPROFILE%\.mozhi-agent-service\api\`.
+- Store local runtime scratch files, logs, temporary task stores, and E2E
+  outputs under this repository's `.tmp/` directory.
+- Do not put logs, JSONL task stores, generated source snapshots, or test
+  outputs in `%USERPROFILE%\.mozhi-agent-service\api\`.
+- Do not commit `.tmp/` contents or any files from
+  `%USERPROFILE%\.mozhi-agent-service\api\`.
+
+Current desktop API secret files:
+
+```text
+%USERPROFILE%\.mozhi-agent-service\api\
+  api-token.txt
+  github-token.txt
+```

@@ -12,9 +12,11 @@ services:
       FRP_TOKEN: "${FRP_TOKEN:?FRP_TOKEN is required}"
       FRP_BIND_PORT: "${FRP_BIND_PORT:-7000}"
       HEALTH_PROXY_PORT: "${HEALTH_PROXY_PORT:-18081}"
+      DESKTOP_API_PROXY_PORT: "${DESKTOP_API_PROXY_PORT:-${HEALTH_PROXY_PORT:-18081}}"
+      API_MAX_BODY_SIZE: "${API_MAX_BODY_SIZE:-1MB}"
+      ALLOW_HTTP_API: "${ALLOW_HTTP_API:-false}"
     volumes:
       - mozhi-caddy-data:/data
 
 volumes:
   mozhi-caddy-data:
-

@@ -7,6 +7,8 @@ services:
       FRP_BIND_PORT: 7000
       HEALTH_PROXY_PORT: 18081
       CADDY_SITE_ADDRESS: ":80"
+      ALLOW_HTTP_API: ${ALLOW_HTTP_API:-false}
+      API_MAX_BODY_SIZE: ${API_MAX_BODY_SIZE:-1MB}
     ports:
       - "18080:80"
       - "7000:7000"

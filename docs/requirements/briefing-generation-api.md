@@ -124,17 +124,33 @@ POST /api/briefings
 
 Request:
 
-```json
-{
-  "title": "快报标题",
-  "source_type": "text|markdown|url|pdf_reference",
-  "source_content": "...",
-  "requester": "team-or-user",
-  "options": {
-    "deck_style": "huawei",
-    "language": "zh-CN"
-  }
-}
+```http
+POST /api/briefings
+Authorization: Bearer <MOZHI_API_TOKEN>
+Content-Type: text/plain; charset=utf-8
+X-Mozhi-Title: AI%20Agent%20%E5%95%86%E4%B8%9A%E5%8C%96%E8%BF%9B%E5%B1%95%E6%B1%87%E6%8A%A5
+```
+
+The request body is arbitrary plain text. It may contain a prompt, Markdown,
+meeting notes, URLs, PDF references, or mixed source material. The API should
+not require callers to classify the source before submission.
+
+`X-Mozhi-Title` is required. ASCII titles may be sent directly. Non-ASCII
+titles, such as Chinese titles, should be UTF-8 percent-encoded because many
+HTTP clients reject raw non-ASCII header values.
+
+The request body must be valid UTF-8 and is limited to 1 MiB by default. The
+desktop API can override this with `MOZHI_MAX_SOURCE_BYTES`; the ECS edge should
+keep a matching `/api/*` request body limit.
+
+Example body:
+
+```text
+请基于下面材料生成一份华为风格 briefing PPT。
+
+材料：
+1. ...
+2. ...
 ```
 
 Response:
@@ -146,6 +162,21 @@ Response:
   "status": "queued"
 }
 ```
+
+Error response:
+
+```json
+{
+  "error": {
+    "code": "missing_title",
+    "message": "X-Mozhi-Title header is required."
+  }
+}
+```
+
+Common error codes include `unauthorized`, `missing_title`, `empty_body`,
+`unsupported_media_type`, `unsupported_charset`, `invalid_utf8`,
+`body_too_large`, `github_issue_create_failed`, and `task_store_failed`.
 
 ## Issue Status Model
 
@@ -167,11 +198,25 @@ Issue updates should include:
 - QA summary when available.
 - Failure reason and retry information on failure.
 
-## First Implementation Scope
+All Issues created by this service should carry the `agent-briefing` label by
+default so generated briefing requests can be filtered and managed separately
+from human-authored repository Issues.
 
-This initialization stage only creates repository structure and records
-requirements. It does not implement API routes, task storage, worker execution,
-GitHub Issue mutation logic, Git LFS configuration, or object storage support.
+## Current Implementation Status
+
+Iteration 1 established the ECS edge gateway and desktop health routing.
+
+Iteration 2 implements the first real API slice:
+
+- `GET /health` is served by the FastAPI desktop API.
+- `POST /api/briefings` accepts authenticated `text/plain` submissions.
+- The API creates a GitHub Issue as the caller-visible status page.
+- The API stores the queued task in a local JSONL task store outside the
+  repository.
+
+The service still does not implement worker execution, Codex CLI invocation, PPT
+generation, QA, final archive creation, Git LFS configuration, or object storage
+support.
 
 ## Future Acceptance Criteria
 
