@@ -6,11 +6,22 @@ The desktop API exposes a read-only local dashboard for operator checks:
 http://127.0.0.1:8080/monitor
 ```
 
+Start the local development API with:
+
+```powershell
+.\scripts\api\start-desktop-api.ps1 -Profile A
+```
+
 The page polls this local JSON endpoint every 5 seconds:
 
 ```text
 http://127.0.0.1:8080/api/monitor/state
 ```
+
+The FRP-backed edge entrypoint should use profile `B -- 边缘接入环境`, which
+listens on `0.0.0.0:18082`.
+From Explorer, double-click `scripts\api\restart-edge-api.cmd` to restart that
+Edge process.
 
 Both routes are guarded by the API process and reject non-loopback clients. The
 monitor does not use the public bearer token in v1 because the selected safety
@@ -29,6 +40,26 @@ edge gateway.
   archives, Git LFS tracking, ECS public health routing, and reverse-proxy
   client/server status.
 
+## Worker Controls
+
+The dashboard also exposes local-only worker start controls:
+
+- Start or rerun one selected task.
+- Delete one selected task, its GitHub Issue, and any local worker state once
+  the task is no longer actively running.
+- Start one drain run that processes pending tasks until none remain.
+- Start a long-running worker loop.
+- Stop a running worker that was launched through the monitor controls.
+
+These controls call the desktop API process at
+`POST /api/monitor/worker/start`, `POST /api/monitor/worker/stop`, and
+`POST /api/monitor/tasks/delete`. They are guarded by the same loopback-only
+rule as the dashboard and should not be exposed through the ECS edge gateway.
+Each start action launches a background worker process and writes stdout/stderr
+under the worker log directory. Start/rerun and delete actions reject tasks that
+are currently running; stale in-progress tasks and failed or QA-failed tasks can
+be selected for cleanup or rerun.
+
 ## Data Sources
 
 The dashboard reads only service-owned local files:
@@ -42,7 +73,8 @@ The dashboard reads only service-owned local files:
 - Optional SSH-based ECS container process check when configured.
 
 It does not call GitHub, mutate worker state, create archive files, write Issue
-comments, run Git commands, retry jobs, or cancel jobs.
+comments, run Git commands, retry jobs, or cancel jobs outside the explicit
+local-only controls listed above.
 
 ## Edge And Proxy Checks
 

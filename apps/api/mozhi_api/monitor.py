@@ -925,6 +925,80 @@ MONITOR_HTML = """<!doctype html>
       height: 100%;
       display: block;
     }
+    .action-bar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto auto auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .action-select {
+      min-height: 38px;
+      border: 1px solid rgba(142, 169, 205, 0.24);
+      border-radius: 6px;
+      background: rgba(8, 19, 34, 0.86);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+    }
+    .action-button {
+      min-height: 38px;
+      border: 1px solid rgba(70, 194, 255, 0.45);
+      border-radius: 6px;
+      background: rgba(70, 194, 255, 0.14);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .action-button:hover, .action-button:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(70, 194, 255, 0.24);
+    }
+    .action-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+    .action-button.danger {
+      border-color: rgba(251, 113, 133, 0.48);
+      background: rgba(251, 113, 133, 0.14);
+    }
+    .worker-processes {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .worker-process {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 10px;
+      border: 1px solid rgba(142, 169, 205, 0.18);
+      border-radius: 6px;
+      background: rgba(8, 19, 34, 0.72);
+    }
+    .worker-process strong {
+      display: block;
+      font-size: 13px;
+    }
+    .worker-process span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .action-status {
+      min-height: 24px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 0.9; }
       50% { transform: scale(1.22); opacity: 1; }
@@ -984,7 +1058,18 @@ MONITOR_HTML = """<!doctype html>
         <section class="tab-panel" data-panel="current">
           <div class="panel" style="height:100%;">
             <h2>当前任务</h2>
-            <div class="scroll-area" id="current-tasks"></div>
+            <div>
+              <div class="action-bar">
+                <select class="action-select" id="pending-task-select"></select>
+                <button class="action-button" id="start-selected-task" type="button">启动/再次运行</button>
+                <button class="action-button danger" id="delete-selected-task" type="button">删除选中任务</button>
+                <button class="action-button" id="drain-pending-tasks" type="button">清理全部 Pending</button>
+                <button class="action-button" id="start-forever-worker" type="button">长期启动 Worker</button>
+              </div>
+              <div class="action-status" id="worker-action-status"></div>
+              <div class="worker-processes" id="worker-processes"></div>
+              <div class="scroll-area" id="current-tasks"></div>
+            </div>
           </div>
         </section>
         <section class="tab-panel" data-panel="health">
@@ -1033,6 +1118,11 @@ MONITOR_HTML = """<!doctype html>
       qa_failed: "QA 失败",
       failed: "失败",
     }[status] || status || "");
+    const actionText = (action) => ({
+      once: "单次任务",
+      drain: "清理 Pending",
+      forever: "常驻 Worker",
+    }[action] || action);
     const pathText = (key) => ({
       task_store: "任务队列文件",
       state_dir: "状态目录",
@@ -1077,6 +1167,103 @@ MONITOR_HTML = """<!doctype html>
         <div>${link(task.issue && task.issue.url, task.issue && task.issue.number ? `#${task.issue.number}` : "")}</div>
       </article>`).join("");
       document.getElementById(target).innerHTML = html || `<div class="empty">${esc(empty)}</div>`;
+    }
+
+    function renderWorkerActions(data) {
+      const runningIds = new Set((data.workers && data.workers.running ? data.workers.running : []).map((process) => process.request_id).filter(Boolean));
+      const inProgress = new Set(["running", "generating", "generation_completed", "qa_passed", "publishing"]);
+      const actionable = data.tasks.all.filter((task) => {
+        if (task.status === "completed") return false;
+        if (runningIds.has(task.request_id)) return false;
+        if (inProgress.has(task.status) && !task.is_stale) return false;
+        return true;
+      });
+      const select = document.getElementById("pending-task-select");
+      select.innerHTML = actionable.map((task) => `<option value="${esc(task.request_id)}">${esc(statusText(task.status))} · ${esc(task.title)} · ${esc(task.request_id)}</option>`).join("");
+      if (!actionable.length) {
+        select.innerHTML = `<option value="">暂无可操作任务</option>`;
+      }
+      document.getElementById("start-selected-task").disabled = !actionable.length;
+      document.getElementById("delete-selected-task").disabled = !actionable.length;
+      document.getElementById("drain-pending-tasks").disabled = !data.tasks.current.some((task) => task.status === "queued");
+    }
+
+    async function startWorker(action, requestId) {
+      const status = document.getElementById("worker-action-status");
+      status.textContent = "正在启动 worker...";
+      try {
+        const response = await fetch("/api/monitor/worker/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, request_id: requestId || null }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error ? data.error.message : `HTTP ${response.status}`);
+        }
+        status.textContent = `已启动：${action}，PID ${data.pid}`;
+        await refresh();
+      } catch (error) {
+        status.textContent = `启动失败：${error.message || error}`;
+      }
+    }
+
+    function renderWorkerProcesses(processes) {
+      const target = document.getElementById("worker-processes");
+      if (!processes.length) {
+        target.innerHTML = `<div class="empty">暂无运行中的 Worker</div>`;
+        return;
+      }
+      target.innerHTML = processes.map((process) => `<article class="worker-process">
+        <div>
+          <strong>${esc(actionText(process.action))} · PID ${esc(process.pid)}</strong>
+          <span>${esc(process.request_id || process.command || "未绑定具体任务")}</span>
+        </div>
+        <button class="action-button danger stop-worker" type="button" data-pid="${esc(process.pid)}">停止 Worker</button>
+      </article>`).join("");
+    }
+
+    async function stopWorker(pid) {
+      const status = document.getElementById("worker-action-status");
+      status.textContent = `正在停止 Worker ${pid}...`;
+      try {
+        const response = await fetch("/api/monitor/worker/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pid }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error ? data.error.message : `HTTP ${response.status}`);
+        }
+        status.textContent = `已停止 Worker ${data.pid}`;
+        await refresh();
+      } catch (error) {
+        status.textContent = `停止失败：${error.message || error}`;
+      }
+    }
+
+    async function deletePendingTask(requestId) {
+      const status = document.getElementById("worker-action-status");
+      if (!requestId) return;
+      const confirmed = window.confirm("清理选中任务，并删除对应 GitHub Issue？此操作不可撤销。正在运行的任务不会被允许清理。");
+      if (!confirmed) return;
+      status.textContent = `正在删除任务 ${requestId}...`;
+      try {
+        const response = await fetch("/api/monitor/tasks/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: requestId }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error ? data.error.message : `HTTP ${response.status}`);
+        }
+        status.textContent = `已删除任务 ${data.request_id} 和 Issue #${data.issue_number}`;
+        await refresh();
+      } catch (error) {
+        status.textContent = `删除失败：${error.message || error}`;
+      }
     }
 
     function renderHealth(target, checks, limit) {
@@ -1178,6 +1365,8 @@ MONITOR_HTML = """<!doctype html>
         renderMetrics(data.statistics, data.status);
         renderRows("overview-current", data.tasks.current.slice(0, 5), "暂无活跃任务");
         renderRows("current-tasks", data.tasks.current, "暂无排队中或进行中的任务");
+        renderWorkerActions(data);
+        renderWorkerProcesses(data.workers ? data.workers.running : []);
         renderRows("terminal-tasks", data.tasks.recent_terminal, "暂无已完成、失败或 QA 失败任务");
         renderHealth("overview-health", data.health, 5);
         window.__monitorChecks = data.health;
@@ -1192,6 +1381,20 @@ MONITOR_HTML = """<!doctype html>
     }
     refresh();
     setInterval(refresh, 5000);
+    document.getElementById("start-selected-task").addEventListener("click", () => {
+      const requestId = document.getElementById("pending-task-select").value;
+      if (requestId) startWorker("once", requestId);
+    });
+    document.getElementById("delete-selected-task").addEventListener("click", () => {
+      const requestId = document.getElementById("pending-task-select").value;
+      if (requestId) deletePendingTask(requestId);
+    });
+    document.getElementById("drain-pending-tasks").addEventListener("click", () => startWorker("drain"));
+    document.getElementById("start-forever-worker").addEventListener("click", () => startWorker("forever"));
+    document.getElementById("worker-processes").addEventListener("click", (event) => {
+      const button = event.target.closest(".stop-worker");
+      if (button) stopWorker(Number(button.dataset.pid));
+    });
   </script>
 </body>
 </html>

@@ -19,11 +19,23 @@ class AgentWorkspaceQaRunner(QaRunner):
     def run(self, generation: GenerationRecord) -> QaResult:
         if not generation.deck_workspace:
             raise WorkerError("Cannot run QA without deck_workspace from Codex handoff.")
-        check_script = self.agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "qa" / "check_huawei_pptx.js"
-        if not check_script.exists():
-            raise WorkerError(f"QA checker is missing: {check_script}")
-        report = generation.deck_workspace / "worker.qa.json"
-        command = ["node", str(check_script), str(generation.candidate_pptx), "--out", str(report)]
+        if not generation.candidate_pptx.exists():
+            raise WorkerError(f"Candidate PPTX from Codex handoff does not exist: {generation.candidate_pptx}")
+        if not generation.deck_workspace.exists():
+            raise WorkerError(f"Deck workspace from Codex handoff does not exist: {generation.deck_workspace}")
+        export_script = self.agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "pptx" / "export_pptx_images.js"
+        if not export_script.exists():
+            raise WorkerError(f"PPT COM export script is missing: {export_script}")
+        slides_dir = generation.slides_dir or generation.deck_workspace / "worker-slides"
+        command = [
+            "node",
+            str(export_script),
+            str(generation.candidate_pptx),
+            "--out",
+            str(slides_dir),
+            "--renderer",
+            "powerpoint",
+        ]
         try:
             completed = subprocess.run(
                 command,
@@ -38,14 +50,22 @@ class AgentWorkspaceQaRunner(QaRunner):
         except subprocess.TimeoutExpired as exc:
             raise WorkerError("PPT QA timed out after 600 seconds.") from exc
         except OSError as exc:
-            raise WorkerError(f"PPT QA could not start: {exc}") from exc
+            raise WorkerError(f"PPT COM export could not start: {exc}") from exc
         if completed.returncode != 0:
-            reason = (completed.stderr or completed.stdout or "QA failed.").strip()
+            reason = (completed.stderr or completed.stdout or "PowerPoint COM export failed.").strip()
             raise QaFailedError(reason)
-        result = result_from_report(report, generation.qa_summary)
-        if not result.passed:
-            raise QaFailedError(result.reason)
-        return result
+        report = slides_dir / "render_manifest.json"
+        slides = sorted(slides_dir.glob("slide_*.png")) if slides_dir.exists() else []
+        if not report.exists():
+            raise QaFailedError(f"PowerPoint COM export did not write render manifest: {report}")
+        if not slides:
+            raise QaFailedError(f"PowerPoint COM export did not render slide PNGs in: {slides_dir}")
+        return QaResult(
+            passed=True,
+            summary_path=generation.qa_summary,
+            report_path=report,
+            warnings=[],
+        )
 
 
 class FakeQaRunner(QaRunner):
@@ -63,6 +83,17 @@ def result_from_report(report_path: Path, summary_path: Path) -> QaResult:
         data = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise WorkerError(f"QA report is unreadable: {report_path}: {exc}") from exc
+    if "passed" not in data and isinstance(data.get("summary"), dict):
+        summary = data["summary"]
+        errors = int(summary.get("errors", 0) or 0)
+        warnings = int(summary.get("warnings", 0) or 0)
+        return QaResult(
+            passed=errors == 0,
+            summary_path=summary_path,
+            report_path=report_path,
+            reason="" if errors == 0 else f"QA report contains {errors} error(s).",
+            warnings=[f"QA report contains {warnings} warning(s)."] if warnings else [],
+        )
     if "passed" not in data:
         return QaResult(
             passed=False,

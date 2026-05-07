@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import mozhi_api.monitor as monitor
-from mozhi_api.main import Settings, create_app
+from mozhi_api.main import JsonlTaskStore, Settings, create_app
 from mozhi_api.monitor import MonitorPaths, build_monitor_snapshot, monitor_html
 
 
@@ -269,6 +269,11 @@ def test_monitor_html_contains_polling_endpoint_and_root():
     assert 'id="health-tabs"' in html
     assert "本地状态" in html
     assert "边缘链路" in html
+    assert "启动/再次运行" in html
+    assert "删除选中任务" in html
+    assert "清理全部 Pending" in html
+    assert "长期启动 Worker" in html
+    assert "停止 Worker" in html
 
 
 def test_monitor_routes_allow_local_clients(tmp_path, monkeypatch):
@@ -301,6 +306,300 @@ def test_monitor_routes_reject_non_loopback_clients(tmp_path):
     response = client.get("/api/monitor/state")
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
+
+
+class FakeWorkerLauncher:
+    def __init__(self):
+        self.calls = []
+        self.stops = []
+
+    def launch(self, action, request_id=None):
+        self.calls.append({"action": action, "request_id": request_id})
+        if action == "once" and not request_id:
+            raise ValueError("request_id is required for action `once`.")
+        return {
+            "pid": 4321,
+            "action": action,
+            "request_id": request_id,
+            "stdout_log": "out.log",
+            "stderr_log": "err.log",
+        }
+
+    def running(self):
+        return [
+            {
+                "pid": 4321,
+                "action": "forever",
+                "request_id": None,
+                "command": "python -m mozhi_worker.cli run",
+                "started_at": "20260507170000.000000+480",
+            }
+        ]
+
+    def stop(self, pid):
+        self.stops.append(pid)
+        if pid != 4321:
+            raise ValueError("Worker process is not running or is not monitor-managed.")
+        return {"pid": pid, "status": "stopped"}
+
+
+class FakeIssueClient:
+    def __init__(self):
+        self.deleted = []
+
+    def create_issue(self, title, body):
+        raise AssertionError("create_issue should not be called")
+
+    def mark_issue_failed(self, issue_number, message):
+        raise AssertionError("mark_issue_failed should not be called")
+
+    def delete_issue(self, issue_number):
+        self.deleted.append(issue_number)
+
+
+def test_monitor_worker_start_launches_selected_task_locally(tmp_path):
+    settings = settings_for(tmp_path)
+    launcher = FakeWorkerLauncher()
+    app = create_app(settings=settings, worker_launcher=launcher)
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post(
+        "/api/monitor/worker/start",
+        json={"action": "once", "request_id": "brf_20260507093000_abc123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pid"] == 4321
+    assert launcher.calls == [
+        {"action": "once", "request_id": "brf_20260507093000_abc123"}
+    ]
+
+
+def test_monitor_state_includes_running_workers(tmp_path):
+    settings = settings_for(tmp_path)
+    launcher = FakeWorkerLauncher()
+    app = create_app(settings=settings, worker_launcher=launcher)
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.get("/api/monitor/state")
+
+    assert response.status_code == 200
+    assert response.json()["workers"]["running"][0]["pid"] == 4321
+
+
+def test_monitor_worker_start_supports_drain_and_forever(tmp_path):
+    settings = settings_for(tmp_path)
+    launcher = FakeWorkerLauncher()
+    app = create_app(settings=settings, worker_launcher=launcher)
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    drain = client.post("/api/monitor/worker/start", json={"action": "drain"})
+    forever = client.post("/api/monitor/worker/start", json={"action": "forever"})
+
+    assert drain.status_code == 200
+    assert forever.status_code == 200
+    assert launcher.calls == [
+        {"action": "drain", "request_id": None},
+        {"action": "forever", "request_id": None},
+    ]
+
+
+def test_monitor_worker_start_rejects_missing_request_id(tmp_path):
+    settings = settings_for(tmp_path)
+    app = create_app(settings=settings, worker_launcher=FakeWorkerLauncher())
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post("/api/monitor/worker/start", json={"action": "once"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_worker_action"
+
+
+def test_monitor_worker_start_rejects_non_loopback_clients(tmp_path):
+    settings = settings_for(tmp_path)
+    app = create_app(settings=settings, worker_launcher=FakeWorkerLauncher())
+    client = TestClient(app, client=("203.0.113.9", 50000))
+
+    response = client.post("/api/monitor/worker/start", json={"action": "drain"})
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_monitor_worker_start_rejects_currently_running_task(tmp_path, monkeypatch):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    request_id = "brf_20260507111111_running"
+    (paths.state_dir / f"{request_id}.json").write_text(
+        json.dumps(
+            {
+                "request_id": request_id,
+                "status": "generating",
+                "updated_at": "2099-01-01T00:00:00+08:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", str(paths.state_dir))
+    launcher = FakeWorkerLauncher()
+    app = create_app(settings=settings, worker_launcher=launcher)
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post(
+        "/api/monitor/worker/start",
+        json={"action": "once", "request_id": request_id},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "task_currently_running"
+    assert launcher.calls == []
+
+
+def test_monitor_worker_stop_stops_worker_locally(tmp_path):
+    settings = settings_for(tmp_path)
+    launcher = FakeWorkerLauncher()
+    app = create_app(settings=settings, worker_launcher=launcher)
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post("/api/monitor/worker/stop", json={"pid": 4321})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "stopped"
+    assert launcher.stops == [4321]
+
+
+def test_monitor_worker_stop_rejects_unknown_pid(tmp_path):
+    settings = settings_for(tmp_path)
+    app = create_app(settings=settings, worker_launcher=FakeWorkerLauncher())
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post("/api/monitor/worker/stop", json={"pid": 9876})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_worker_pid"
+
+
+def test_monitor_worker_stop_rejects_non_loopback_clients(tmp_path):
+    settings = settings_for(tmp_path)
+    app = create_app(settings=settings, worker_launcher=FakeWorkerLauncher())
+    client = TestClient(app, client=("203.0.113.9", 50000))
+
+    response = client.post("/api/monitor/worker/stop", json={"pid": 4321})
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_monitor_task_delete_removes_queued_task_and_issue_locally(tmp_path, monkeypatch):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    record = task_record(request_id="brf_20260507111111_delete")
+    write_jsonl(settings.task_store_path, record)
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", str(paths.state_dir))
+    issue_client = FakeIssueClient()
+    app = create_app(
+        settings=settings,
+        issue_client=issue_client,
+        task_store=JsonlTaskStore(settings.task_store_path),
+    )
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post(
+        "/api/monitor/tasks/delete",
+        json={"request_id": "brf_20260507111111_delete"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "deleted"
+    assert issue_client.deleted == [12]
+    assert settings.task_store_path.read_text(encoding="utf-8") == ""
+
+
+def test_monitor_task_delete_rejects_currently_running_task_with_worker_state(tmp_path, monkeypatch):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    request_id = "brf_20260507111111_started"
+    write_jsonl(settings.task_store_path, task_record(request_id=request_id))
+    (paths.state_dir / f"{request_id}.json").write_text(
+        json.dumps(
+            {
+                "request_id": request_id,
+                "status": "running",
+                "updated_at": "2099-01-01T00:00:00+08:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", str(paths.state_dir))
+    issue_client = FakeIssueClient()
+    app = create_app(
+        settings=settings,
+        issue_client=issue_client,
+        task_store=JsonlTaskStore(settings.task_store_path),
+    )
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post("/api/monitor/tasks/delete", json={"request_id": request_id})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "task_currently_running"
+    assert issue_client.deleted == []
+
+
+def test_monitor_task_delete_allows_stale_in_progress_task(tmp_path, monkeypatch):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    request_id = "brf_20260507111111_stale"
+    record = task_record(request_id=request_id)
+    write_jsonl(settings.task_store_path, record)
+    (paths.state_dir / f"{request_id}.json").write_text(
+        json.dumps(
+            {
+                "request_id": request_id,
+                "status": "generating",
+                "updated_at": "2026-05-07T08:00:00+08:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", str(paths.state_dir))
+    issue_client = FakeIssueClient()
+    app = create_app(
+        settings=settings,
+        issue_client=issue_client,
+        task_store=JsonlTaskStore(settings.task_store_path),
+    )
+    client = TestClient(app, client=("127.0.0.1", 50000))
+
+    response = client.post(
+        "/api/monitor/tasks/delete",
+        json={"request_id": request_id},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "deleted"
+    assert issue_client.deleted == [12]
+    assert not (paths.state_dir / f"{request_id}.json").exists()
+
+
+def test_monitor_task_delete_rejects_non_loopback_clients(tmp_path):
+    settings = settings_for(tmp_path)
+    issue_client = FakeIssueClient()
+    app = create_app(settings=settings, issue_client=issue_client)
+    client = TestClient(app, client=("203.0.113.9", 50000))
+
+    response = client.post(
+        "/api/monitor/tasks/delete",
+        json={"request_id": "brf_20260507111111_delete"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+    assert issue_client.deleted == []
 
 
 def test_monitor_snapshot_truncates_long_titles_and_source_previews(tmp_path):

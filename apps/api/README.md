@@ -47,14 +47,22 @@ cd ..\..
 .\scripts\api\start-desktop-api.ps1
 ```
 
-The service listens on `127.0.0.1:8080`.
+This starts profile `A -- 开发环境`. The service listens on
+`127.0.0.1:8080`.
 
-For the current FRP-backed ECS route, run it on the tunnel target port:
+For the current FRP-backed ECS route, start profile `B -- 边缘接入环境`:
 
 ```powershell
-$env:MOZHI_API_HOST = "0.0.0.0"
-$env:MOZHI_API_PORT = "18082"
-.\scripts\api\start-desktop-api.ps1
+.\scripts\api\start-desktop-api.ps1 -Profile B
+```
+
+Profile `B` listens on `0.0.0.0:18082`. The ECS/FRP route should target this
+port; profile `A` remains a local development endpoint.
+
+To restart the Edge API from Explorer, double-click:
+
+```text
+scripts\api\restart-edge-api.cmd
 ```
 
 ## Submit A Briefing

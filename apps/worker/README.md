@@ -65,3 +65,8 @@ Codex generation is intentionally constrained to AgentWorkspace. It receives the
 API body as `source.md`, reads AgentWorkspace `AGENTS.md`, uses the registered
 skills there, and returns a structured `handoff.json`. It must not update
 GitHub Issues, archive files into this repository, or push git branches.
+
+The worker quality gate uses the `candidate_pptx` path from `handoff.json` and
+passes when the AgentWorkspace PowerPoint COM export script renders slide PNGs
+and a render manifest successfully. Skill-level QA JSON is useful evidence, but
+the worker does not require a top-level `passed` field in that JSON.

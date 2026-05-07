@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--once", action="store_true")
+    run_parser.add_argument("--drain", action="store_true")
     run_parser.add_argument("--request-id")
 
     claim_parser = subparsers.add_parser("claim-task")
@@ -72,6 +73,14 @@ def main() -> int:
     reader = JsonlTaskReader(settings.task_store_path)
     if args.command in {None, "run"}:
         worker = Worker(settings=settings, task_reader=reader)
+        if getattr(args, "drain", False):
+            processed = 0
+            while worker.run_once(getattr(args, "request_id", None)):
+                processed += 1
+                if getattr(args, "request_id", None):
+                    break
+            print(json.dumps({"processed": processed}, ensure_ascii=False))
+            return 0 if processed else 1
         if getattr(args, "once", False):
             return 0 if worker.run_once(getattr(args, "request_id", None)) else 1
         worker.run_forever()

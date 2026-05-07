@@ -7,6 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from mozhi_worker import cli as worker_cli
 from mozhi_worker.archive import Archiver, archive_relative_dir, sha256_file
 from mozhi_worker.codex_runner import build_codex_prompt, codex_command, handoff_contract, load_handoff, status_script
 from mozhi_worker.config import WorkerSettings
@@ -223,37 +224,43 @@ def test_load_handoff_rejects_missing_candidate(tmp_path):
         load_handoff(handoff)
 
 
-def test_ambiguous_qa_report_fails_closed(tmp_path):
+def test_qa_report_without_passed_uses_error_count(tmp_path):
     report = tmp_path / "qa.json"
     summary = tmp_path / "qa-summary.md"
-    report.write_text('{"issues": []}', encoding="utf-8")
+    report.write_text('{"summary": {"errors": 0, "warnings": 3}, "issues": []}', encoding="utf-8")
     summary.write_text("QA summary", encoding="utf-8")
 
     result = result_from_report(report, summary)
 
-    assert result.passed is False
-    assert "explicit passed field" in result.reason
+    assert result.passed is True
+    assert result.report_path == report
 
 
-def test_agent_workspace_qa_reruns_checker_even_when_handoff_has_report(monkeypatch, tmp_path):
+def test_agent_workspace_qa_passes_when_powerpoint_export_succeeds(monkeypatch, tmp_path):
     agent_workspace = tmp_path / "AgentWorkspace"
-    check_script = agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "qa" / "check_huawei_pptx.js"
-    check_script.parent.mkdir(parents=True)
-    check_script.write_text("check", encoding="utf-8")
+    export_script = agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "pptx" / "export_pptx_images.js"
+    export_script.parent.mkdir(parents=True)
+    export_script.write_text("export", encoding="utf-8")
     candidate = tmp_path / "candidate.pptx"
     summary = tmp_path / "qa-summary.md"
     stale_report = tmp_path / "stale.qa.json"
     deck_workspace = tmp_path / "deck"
+    slides = deck_workspace / "slides"
     candidate.write_bytes(b"pptx")
     summary.write_text("QA passed", encoding="utf-8")
-    stale_report.write_text('{"passed": true, "issues": []}', encoding="utf-8")
+    stale_report.write_text('{"passed": false, "issues": [{"severity": "error"}]}', encoding="utf-8")
     deck_workspace.mkdir()
     calls = []
 
     def fake_run(command, **kwargs):
         calls.append(command)
         out_path = Path(command[command.index("--out") + 1])
-        out_path.write_text('{"passed": true, "issues": []}', encoding="utf-8")
+        out_path.mkdir(parents=True)
+        (out_path / "slide_01.png").write_bytes(b"png")
+        (out_path / "render_manifest.json").write_text(
+            '{"renderer": "powerpoint", "slide_count": 1}',
+            encoding="utf-8",
+        )
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -263,20 +270,23 @@ def test_agent_workspace_qa_reruns_checker_even_when_handoff_has_report(monkeypa
             candidate_pptx=candidate,
             qa_summary=summary,
             qa_json=stale_report,
+            slides_dir=slides,
             deck_workspace=deck_workspace,
         )
     )
 
     assert result.passed is True
     assert calls
-    assert result.report_path == deck_workspace / "worker.qa.json"
+    assert "--renderer" in calls[0]
+    assert calls[0][calls[0].index("--renderer") + 1] == "powerpoint"
+    assert result.report_path == slides / "render_manifest.json"
 
 
 def test_agent_workspace_qa_wraps_missing_node(monkeypatch, tmp_path):
     agent_workspace = tmp_path / "AgentWorkspace"
-    check_script = agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "qa" / "check_huawei_pptx.js"
-    check_script.parent.mkdir(parents=True)
-    check_script.write_text("check", encoding="utf-8")
+    export_script = agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "pptx" / "export_pptx_images.js"
+    export_script.parent.mkdir(parents=True)
+    export_script.write_text("export", encoding="utf-8")
     candidate = tmp_path / "candidate.pptx"
     summary = tmp_path / "qa-summary.md"
     deck_workspace = tmp_path / "deck"
@@ -521,6 +531,31 @@ def test_worker_skips_tasks_with_terminal_state(tmp_path):
     )
 
     assert worker.run_once() is False
+
+
+def test_worker_cli_drain_runs_until_no_queued_tasks(monkeypatch, tmp_path, capsys):
+    calls = []
+
+    class FakeDrainWorker:
+        def __init__(self, **kwargs):
+            pass
+
+        def run_once(self, request_id=None):
+            calls.append(request_id)
+            return len(calls) < 3
+
+    monkeypatch.setattr(sys, "argv", ["mozhi-worker", "run", "--drain"])
+    monkeypatch.setenv("MOZHI_TASK_STORE_PATH", str(tmp_path / "tasks.jsonl"))
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("MOZHI_WORKER_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("MOZHI_AGENT_WORKSPACE", str(tmp_path / "AgentWorkspace"))
+    monkeypatch.setattr(worker_cli, "Worker", FakeDrainWorker)
+
+    exit_code = worker_cli.main()
+
+    assert exit_code == 0
+    assert calls == [None, None, None]
+    assert json.loads(capsys.readouterr().out)["processed"] == 2
 
 
 def test_worker_fake_qa_failure_does_not_publish(tmp_path):

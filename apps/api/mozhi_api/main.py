@@ -26,6 +26,14 @@ DEFAULT_ISSUE_LABEL = "agent-briefing"
 SOURCE_PREVIEW_CHARS = 60000
 DEFAULT_MAX_SOURCE_BYTES = 1024 * 1024
 SERVICE_TIMEZONE = timezone(timedelta(hours=8))
+IN_PROGRESS_STATUSES = {
+    "running",
+    "generating",
+    "generation_completed",
+    "qa_passed",
+    "publishing",
+}
+DEFAULT_MONITOR_STALE_AFTER_MINUTES = 30
 _task_store_lock = threading.Lock()
 
 
@@ -117,6 +125,38 @@ class GitHubIssueClient:
         issue_url = f"https://api.github.com/repos/{self.repository}/issues/{issue_number}"
         self._send_json(issue_url, {"state": "closed", "state_reason": "not_planned"}, method="PATCH")
 
+    def delete_issue(self, issue_number: int) -> None:
+        if not self.token:
+            raise GitHubIssueCreateError("GITHUB_TOKEN is not configured.")
+
+        owner, name = split_repository(self.repository)
+        query = """
+        query($owner: String!, $name: String!, $number: Int!) {
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+              id
+            }
+          }
+        }
+        """
+        data = self._send_graphql(
+            query,
+            {"owner": owner, "name": name, "number": issue_number},
+        )
+        issue = data.get("repository", {}).get("issue") if isinstance(data, dict) else None
+        issue_id = issue.get("id") if isinstance(issue, dict) else None
+        if not issue_id:
+            raise GitHubIssueCreateError(f"GitHub Issue #{issue_number} was not found.")
+
+        mutation = """
+        mutation($id: ID!) {
+          deleteIssue(input: {issueId: $id}) {
+            clientMutationId
+          }
+        }
+        """
+        self._send_graphql(mutation, {"id": issue_id})
+
     def _send_json(self, url: str, payload: dict[str, Any], method: str) -> dict[str, Any]:
         request = urllib.request.Request(
             url,
@@ -140,6 +180,36 @@ class GitHubIssueClient:
             ) from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise GitHubIssueCreateError(f"GitHub API request failed: {exc}") from exc
+
+    def _send_graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        request = urllib.request.Request(
+            "https://api.github.com/graphql",
+            data=json.dumps({"query": query, "variables": variables}).encode("utf-8"),
+            method="POST",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "User-Agent": "mozhi-agent-service-api",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise GitHubIssueCreateError(
+                f"GitHub GraphQL returned {exc.code}: {detail}"
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise GitHubIssueCreateError(f"GitHub GraphQL request failed: {exc}") from exc
+
+        if payload.get("errors"):
+            raise GitHubIssueCreateError(f"GitHub GraphQL returned errors: {payload['errors']}")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise GitHubIssueCreateError("GitHub GraphQL response was missing data.")
+        return data
 
 
 class GhCliIssueClient:
@@ -215,6 +285,32 @@ class GhCliIssueClient:
         except subprocess.TimeoutExpired as exc:
             raise GitHubIssueCreateError("gh issue close timed out.") from exc
 
+    def delete_issue(self, issue_number: int) -> None:
+        try:
+            subprocess.run(
+                [
+                    "gh",
+                    "issue",
+                    "delete",
+                    str(issue_number),
+                    "--repo",
+                    self.repository,
+                    "--yes",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=30,
+            )
+        except FileNotFoundError as exc:
+            raise GitHubIssueCreateError("gh CLI is not installed.") from exc
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or "").strip()
+            raise GitHubIssueCreateError(f"gh issue delete failed: {detail}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise GitHubIssueCreateError("gh issue delete timed out.") from exc
+
 
 class JsonlTaskStore:
     def __init__(self, path: Path) -> None:
@@ -227,16 +323,185 @@ class JsonlTaskStore:
             with self.path.open("a", encoding="utf-8", newline="\n") as file:
                 file.write(line)
 
+    def get(self, request_id: str) -> dict[str, Any] | None:
+        if not self.path.exists():
+            return None
+        with _task_store_lock:
+            with self.path.open("r", encoding="utf-8") as file:
+                for line in file:
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if str(data.get("request_id") or "") == request_id:
+                        return data
+        return None
+
+    def delete(self, request_id: str) -> dict[str, Any]:
+        if not self.path.exists():
+            raise ValueError("Task store does not exist.")
+
+        removed: dict[str, Any] | None = None
+        kept_lines: list[str] = []
+        with _task_store_lock:
+            with self.path.open("r", encoding="utf-8") as file:
+                for line in file:
+                    if not line.strip():
+                        kept_lines.append(line)
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        kept_lines.append(line)
+                        continue
+                    if str(data.get("request_id") or "") != request_id:
+                        kept_lines.append(line)
+                        continue
+                    removed = data
+
+            if removed is None:
+                raise ValueError("Task was not found.")
+
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("w", encoding="utf-8", newline="\n") as file:
+                file.writelines(kept_lines)
+
+        return removed
+
 
 def default_task_store_path() -> str:
     repo_root = Path(__file__).resolve().parents[3]
     return str(repo_root / ".tmp" / "api" / "tasks.jsonl")
 
 
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+class WorkerLauncher:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def running(self) -> list[dict[str, Any]]:
+        if os.name == "nt":
+            return self.running_windows()
+        return []
+
+    def launch(self, action: str, request_id: str | None = None) -> dict[str, Any]:
+        command = self.command_for(action, request_id)
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(self.root / "apps" / "worker")
+        log_dir = self.root / ".tmp" / "worker" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stamp = now_service_time().strftime("%Y%m%d-%H%M%S")
+        stdout_path = log_dir / f"monitor-worker-{action}-{stamp}.out.log"
+        stderr_path = log_dir / f"monitor-worker-{action}-{stamp}.err.log"
+        stdout = stdout_path.open("w", encoding="utf-8")
+        stderr = stderr_path.open("w", encoding="utf-8")
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=self.root / "apps" / "worker",
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+            )
+        finally:
+            stdout.close()
+            stderr.close()
+        return {
+            "pid": process.pid,
+            "action": action,
+            "request_id": request_id,
+            "stdout_log": str(stdout_path),
+            "stderr_log": str(stderr_path),
+        }
+
+    def command_for(self, action: str, request_id: str | None) -> list[str]:
+        base = ["python", "-m", "mozhi_worker.cli", "run"]
+        if action == "once":
+            if not request_id:
+                raise ValueError("request_id is required for action `once`.")
+            return [*base, "--once", "--request-id", request_id]
+        if action == "drain":
+            return [*base, "--drain"]
+        if action == "forever":
+            return base
+        raise ValueError("action must be one of: once, drain, forever.")
+
+    def stop(self, pid: int) -> dict[str, Any]:
+        running = {process["pid"]: process for process in self.running()}
+        if pid not in running:
+            raise ValueError(f"Worker process is not running or is not monitor-managed: {pid}")
+        if os.name == "nt":
+            completed = subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if completed.returncode != 0:
+                raise OSError(completed.stderr.strip() or completed.stdout.strip())
+        else:
+            os.kill(pid, 15)
+        return {"pid": pid, "status": "stopped", "process": running[pid]}
+
+    def running_windows(self) -> list[dict[str, Any]]:
+        command = (
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -match 'mozhi_worker\\.cli' -and $_.CommandLine -match ' run( |$)' } | "
+            "Select-Object ProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress"
+        )
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        if completed.returncode != 0 or not completed.stdout.strip():
+            return []
+        try:
+            raw = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return []
+        records = raw if isinstance(raw, list) else [raw]
+        return [
+            self.describe_process(record)
+            for record in records
+            if isinstance(record, dict) and record.get("ProcessId")
+        ]
+
+    def describe_process(self, record: dict[str, Any]) -> dict[str, Any]:
+        command_line = str(record.get("CommandLine") or "")
+        action = "forever"
+        if "--once" in command_line:
+            action = "once"
+        elif "--drain" in command_line:
+            action = "drain"
+        request_id = None
+        match = re.search(r"--request-id\s+([^\s]+)", command_line)
+        if match:
+            request_id = match.group(1)
+        return {
+            "pid": int(record["ProcessId"]),
+            "action": action,
+            "request_id": request_id,
+            "command": command_line,
+            "started_at": str(record.get("CreationDate") or ""),
+        }
+
+
 def create_app(
     settings: Settings | None = None,
     issue_client: GitHubIssueClient | GhCliIssueClient | None = None,
     task_store: JsonlTaskStore | None = None,
+    worker_launcher: WorkerLauncher | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     resolved_issue_client = issue_client or default_issue_client(
@@ -245,11 +510,13 @@ def create_app(
         resolved_settings.issue_label,
     )
     resolved_task_store = task_store or JsonlTaskStore(resolved_settings.task_store_path)
+    resolved_worker_launcher = worker_launcher or WorkerLauncher(repo_root())
 
     app = FastAPI(title="Mozhi Agent Service API", version=SERVICE_VERSION)
     app.state.settings = resolved_settings
     app.state.issue_client = resolved_issue_client
     app.state.task_store = resolved_task_store
+    app.state.worker_launcher = resolved_worker_launcher
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -274,7 +541,124 @@ def create_app(
             return error_response(403, "forbidden", "Monitor routes are local-only.")
         from .monitor import build_monitor_snapshot
 
-        return JSONResponse(build_monitor_snapshot(resolved_settings))
+        snapshot = build_monitor_snapshot(resolved_settings)
+        snapshot["workers"] = {"running": resolved_worker_launcher.running()}
+        return JSONResponse(snapshot)
+
+    @app.post("/api/monitor/worker/start")
+    async def monitor_worker_start(request: Request) -> JSONResponse:
+        if not is_local_request(request):
+            return error_response(403, "forbidden", "Monitor routes are local-only.")
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError:
+            return error_response(400, "invalid_json", "Request body must be JSON.")
+
+        action = str(payload.get("action") or "")
+        request_id = str(payload.get("request_id") or "").strip() or None
+        if action == "once" and request_id and is_task_currently_running(
+            request_id,
+            resolved_worker_launcher,
+        ):
+            return error_response(
+                409,
+                "task_currently_running",
+                "This task is currently running and cannot be started again.",
+            )
+        try:
+            launched = resolved_worker_launcher.launch(action, request_id)
+        except ValueError as exc:
+            return error_response(400, "invalid_worker_action", str(exc))
+        except OSError as exc:
+            return error_response(500, "worker_launch_failed", str(exc))
+        return JSONResponse({"status": "started", **launched})
+
+    @app.post("/api/monitor/worker/stop")
+    async def monitor_worker_stop(request: Request) -> JSONResponse:
+        if not is_local_request(request):
+            return error_response(403, "forbidden", "Monitor routes are local-only.")
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError:
+            return error_response(400, "invalid_json", "Request body must be JSON.")
+
+        try:
+            pid = int(payload.get("pid"))
+        except (TypeError, ValueError):
+            return error_response(400, "invalid_worker_pid", "pid must be an integer.")
+        try:
+            stopped = resolved_worker_launcher.stop(pid)
+        except ValueError as exc:
+            return error_response(400, "invalid_worker_pid", str(exc))
+        except OSError as exc:
+            return error_response(500, "worker_stop_failed", str(exc))
+        return JSONResponse(stopped)
+
+    @app.post("/api/monitor/tasks/delete")
+    async def monitor_task_delete(request: Request) -> JSONResponse:
+        if not is_local_request(request):
+            return error_response(403, "forbidden", "Monitor routes are local-only.")
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError:
+            return error_response(400, "invalid_json", "Request body must be JSON.")
+
+        request_id = str(payload.get("request_id") or "").strip()
+        if not request_id:
+            return error_response(400, "missing_request_id", "request_id is required.")
+
+        try:
+            task = resolved_task_store.get(request_id)
+        except (OSError, json.JSONDecodeError) as exc:
+            return error_response(500, "task_store_read_failed", str(exc))
+        if not task:
+            return error_response(404, "task_not_found", "Task was not found.")
+
+        state_dir = Path(
+            os.environ.get("MOZHI_WORKER_STATE_DIR", repo_root() / ".tmp" / "worker" / "state")
+        )
+        state_path = state_dir / f"{request_id}.json"
+        state = read_worker_state(state_path)
+        if is_task_currently_running(request_id, resolved_worker_launcher, state):
+            return error_response(
+                409,
+                "task_currently_running",
+                "This task is currently running and cannot be cleaned up.",
+            )
+
+        issue = task.get("issue") if isinstance(task.get("issue"), dict) else {}
+        try:
+            issue_number = int(issue.get("number"))
+        except (TypeError, ValueError):
+            return error_response(500, "task_issue_missing", "Task record is missing an Issue number.")
+
+        try:
+            resolved_issue_client.delete_issue(issue_number)
+        except GitHubIssueCreateError as exc:
+            return error_response(
+                502,
+                "github_issue_delete_failed",
+                f"Failed to delete GitHub Issue: {exc}",
+            )
+
+        try:
+            deleted = resolved_task_store.delete(request_id)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return error_response(409, "task_delete_failed", str(exc))
+        try:
+            state_path.unlink(missing_ok=True)
+        except OSError as exc:
+            return error_response(500, "task_state_delete_failed", str(exc))
+
+        return JSONResponse(
+            {
+                "status": "deleted",
+                "request_id": request_id,
+                "issue_number": issue_number,
+                "title": deleted.get("title"),
+            }
+        )
+
 
     @app.post("/api/briefings", status_code=202)
     async def create_briefing(request: Request) -> JSONResponse:
@@ -415,6 +799,67 @@ def mark_issue_failed(
         issue_client.mark_issue_failed(issue_number, message)
     except GitHubIssueCreateError:
         pass
+
+
+def split_repository(repository: str) -> tuple[str, str]:
+    owner, separator, name = repository.partition("/")
+    if not separator or not owner or not name:
+        raise GitHubIssueCreateError(
+            f"GitHub repository must be in owner/name form: {repository}"
+        )
+    return owner, name
+
+
+def read_worker_state(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, json.JSONDecodeError, TypeError):
+        return None
+
+
+def is_currently_running_state(state: dict[str, Any] | None) -> bool:
+    if not state:
+        return False
+    status = str(state.get("status") or "")
+    if status not in IN_PROGRESS_STATUSES:
+        return False
+    updated = parse_datetime(str(state.get("updated_at") or state.get("claimed_at") or ""))
+    if not updated:
+        return True
+    stale_after = timedelta(minutes=DEFAULT_MONITOR_STALE_AFTER_MINUTES)
+    return now_service_time() - updated <= stale_after
+
+
+def is_task_currently_running(
+    request_id: str,
+    worker_launcher: WorkerLauncher,
+    state: dict[str, Any] | None = None,
+) -> bool:
+    active_request_ids = {
+        str(process.get("request_id"))
+        for process in worker_launcher.running()
+        if process.get("request_id")
+    }
+    if request_id in active_request_ids:
+        return True
+    if state is None:
+        state_dir = Path(
+            os.environ.get("MOZHI_WORKER_STATE_DIR", repo_root() / ".tmp" / "worker" / "state")
+        )
+        state = read_worker_state(state_dir / f"{request_id}.json")
+    return is_currently_running_state(state)
+
+
+def parse_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=SERVICE_TIMEZONE)
+    return parsed.astimezone(SERVICE_TIMEZONE)
 
 
 def default_issue_client(

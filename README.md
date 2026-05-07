@@ -73,6 +73,8 @@ files:
 
 Operators can open the desktop-only monitoring dashboard at
 `http://127.0.0.1:8080/monitor` when the local API process is running.
+Start it with `.\scripts\api\start-desktop-api.ps1 -Profile A`. The
+FRP-backed edge entrypoint uses profile `B` on `0.0.0.0:18082`.
 
 The monitor is read-only and local-only. It summarizes queued tasks, worker
 state, recent terminal jobs, archive metadata, and local health checks without
