@@ -60,16 +60,28 @@ MOZHI_API_TOKEN
 GITHUB_TOKEN              optional when authenticated gh CLI is available
 GITHUB_REPOSITORY          optional, defaults to MozhiJiawei/Mozhi-s-Agent-Service
 MOZHI_ISSUE_LABEL          optional, defaults to agent-briefing
-MOZHI_TASK_STORE_PATH      optional, defaults to <repo>\.tmp\api\tasks.jsonl
+MOZHI_TASK_STORE_PATH      optional, defaults to <repo>\.runtime\api\tasks.jsonl
+MOZHI_API_LOG_DIR          optional, defaults to <repo>\.runtime\api\logs
+MOZHI_WORKER_STATE_DIR     optional, defaults to <repo>\.runtime\worker\state
+MOZHI_WORKER_LOG_DIR       optional, defaults to <repo>\.runtime\worker\logs
 MOZHI_MAX_SOURCE_BYTES     optional, defaults to 1048576
 ```
 
 The token files above are operator-managed storage locations outside the
 repository. Do not copy them into Git, issue text, logs, or chat.
 
-Runtime logs, temporary task stores, E2E outputs, generated request snapshots,
-and other scratch files belong under the repository `.tmp/` directory, not under
-`%USERPROFILE%\.mozhi-agent-service\api\`.
+Durable runtime logs, task stores, Worker state, and monitor-relevant records
+belong under the repository `.runtime/` directory by default, not under
+`%USERPROFILE%\.mozhi-agent-service\api\`. Disposable E2E outputs, generated
+scratch workspaces, and one-off verification artifacts belong under `.tmp/` and
+must be safe to delete.
+
+For existing desktop installs, stop the API and Worker before moving old files:
+
+```powershell
+Move-Item <repo>\.tmp\api <repo>\.runtime\api -ErrorAction SilentlyContinue
+Move-Item <repo>\.tmp\worker <repo>\.runtime\worker -ErrorAction SilentlyContinue
+```
 
 When `GITHUB_TOKEN` is not loaded into the API process, the desktop runtime may
 use the authenticated GitHub CLI keyring instead. Verify it with:

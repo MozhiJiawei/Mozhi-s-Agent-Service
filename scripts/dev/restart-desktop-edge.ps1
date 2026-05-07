@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $apiStartScript = Join-Path $repoRoot "scripts\api\start-desktop-api.ps1"
-$logRoot = Join-Path $repoRoot ".tmp\api\logs"
+$logRoot = Join-Path $repoRoot ".runtime\api\logs"
 $apiOutLog = Join-Path $logRoot "api-$ApiPort.out.log"
 $apiErrLog = Join-Path $logRoot "api-$ApiPort.err.log"
 

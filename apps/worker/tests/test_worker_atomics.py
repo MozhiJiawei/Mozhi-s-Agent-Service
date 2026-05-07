@@ -558,6 +558,18 @@ def test_worker_cli_drain_runs_until_no_queued_tasks(monkeypatch, tmp_path, caps
     assert json.loads(capsys.readouterr().out)["processed"] == 2
 
 
+def test_worker_settings_defaults_use_durable_runtime_dir(monkeypatch):
+    monkeypatch.delenv("MOZHI_TASK_STORE_PATH", raising=False)
+    monkeypatch.delenv("MOZHI_WORKER_STATE_DIR", raising=False)
+    monkeypatch.delenv("MOZHI_WORKER_LOG_DIR", raising=False)
+
+    settings = WorkerSettings.from_env()
+
+    assert settings.task_store_path.parts[-3:] == (".runtime", "api", "tasks.jsonl")
+    assert settings.state_dir.parts[-3:] == (".runtime", "worker", "state")
+    assert settings.log_dir.parts[-3:] == (".runtime", "worker", "logs")
+
+
 def test_worker_default_agent_workspace_is_repo_local(monkeypatch):
     monkeypatch.delenv("MOZHI_AGENT_WORKSPACE", raising=False)
     monkeypatch.setenv("MOZHI_TASK_STORE_PATH", "tasks.jsonl")

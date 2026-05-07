@@ -352,7 +352,7 @@ flowchart LR
   edge["ECS edge\nCaddy + frps"]
   api["Desktop FastAPI\napps/api"]
   issue["GitHub Issue"]
-  queue[".tmp/api/tasks.jsonl"]
+  queue[".runtime/api/tasks.jsonl"]
   worker["Desktop Worker\napps/worker"]
   workspace["Mozhi-s-AgentWorkspace\nhw-ppt-gen skill"]
   handoff["handoff.json"]
@@ -409,8 +409,8 @@ flowchart TB
     apiProc["FastAPI process\n127.0.0.1:8080"]
     workerProc["Worker process\nPython CLI"]
     frpc["frpc client\nDocker or local process"]
-    apiTmp[".tmp/api\ntasks + logs"]
-    workerTmp[".tmp/worker\nstate + logs"]
+    apiTmp[".runtime/api\ntasks + logs"]
+    workerTmp[".runtime/worker\nstate + logs"]
     archives["briefings/\nfinal archives"]
     localSecrets["%USERPROFILE%\\.mozhi-agent-service\\api\napi-token + github-token"]
     agentWorkspace["Mozhi-s-AgentWorkspace\n<service repo>\\AgentWorkspace"]
@@ -441,7 +441,8 @@ flowchart TB
 - ECS 只承载边缘网关：Caddy、`frps`、TLS/HTTP 路由和请求体限制。
 - ECS 镜像不得包含 FastAPI 业务代码、Worker、Codex、PPT 生成能力、真实生成产物或 briefing archives。
 - 桌面主机承载业务执行：API、Worker、Codex CLI、`Mozhi-s-AgentWorkspace`、本地任务状态和最终归档。
-- 本仓库 `.tmp/` 保存服务运行态文件，必须被视为临时状态，不提交。
+- 本仓库 `.runtime/` 保存服务运行态文件，必须被视为本地持久状态，不提交。
+- 本仓库 `.tmp/` 只保存可删除 scratch，例如本地验证输出和测试临时文件。
 - `%USERPROFILE%\.mozhi-agent-service\api\` 只保存 secret，不保存日志、任务队列、测试输出或 scratch 产物。
 - 每个 Service clone 默认使用其下的 `AgentWorkspace/` 子仓；`AgentWorkspace/.tmp/` 保存生成过程文件；本仓库只接收最终 curated artifacts。
 - GitHub 是外部可见状态与代码归档平台，不是 Worker 的唯一恢复事实源。
@@ -494,8 +495,8 @@ Constraints:
 
 Owned by:
 
-- `.tmp/api/tasks.jsonl`
-- `.tmp/worker/state/*.json`
+- `.runtime/api/tasks.jsonl`
+- `.runtime/worker/state/*.json`
 - `apps/worker/mozhi_worker/task_store.py`
 - `apps/worker/mozhi_worker/state.py`
 
@@ -644,7 +645,8 @@ flowchart LR
 
 - Source text 可以进入 Issue preview、任务队列、AgentWorkspace runtime 和最终 `source.md`。
 - Secret 只能通过环境变量或 secret 文件进入进程，不得进入 Issue、manifest、archive 或 logs。
-- Runtime logs 留在 `.tmp/` 或 AgentWorkspace `.tmp/`，不进入最终 archive。
+- Runtime logs 留在 `.runtime/`，AgentWorkspace generation scratch 留在
+  AgentWorkspace `.tmp/`，两者都不进入最终 archive。
 - Manifest 是最终 artifact 的可迁移索引，不是运行日志。
 
 ## 状态模型

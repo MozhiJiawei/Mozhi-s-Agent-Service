@@ -8,6 +8,7 @@ AgentWorkspace/
 .env.*
 !.env.example
 **/.tmp/
+**/.runtime/
 **/tmp/
 **/__pycache__/
 *.py[cod]

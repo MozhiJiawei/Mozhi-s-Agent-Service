@@ -64,8 +64,10 @@ be selected for cleanup or rerun.
 
 The dashboard reads only service-owned local files:
 
-- `.tmp/api/tasks.jsonl`
-- `.tmp/worker/state/*.json`
+- `.runtime/api/tasks.jsonl`
+- `.runtime/worker/state/*.json`
+- `.runtime/api/logs/*`
+- `.runtime/worker/logs/*`
 - `briefings/**/manifest.json`
 - `.gitattributes`
 - Docker container status for the desktop `frpc` client.
@@ -118,3 +120,19 @@ The monitor is an operator page, not a delivery UI or worker control plane. Keep
 public routing focused on `/health` and `/api/briefings`. Future remote access
 should use an explicit monitor token, VPN, or authenticated tunnel rather than
 publishing the local dashboard directly.
+
+## Runtime Migration
+
+The monitor now treats `.tmp/` as disposable scratch and reads durable service
+state from `.runtime/` by default. Before deleting an existing `.tmp/`, stop the
+desktop API and Worker, then move any local state you still need:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .runtime | Out-Null
+Move-Item .tmp\api .runtime\api -ErrorAction SilentlyContinue
+Move-Item .tmp\worker .runtime\worker -ErrorAction SilentlyContinue
+```
+
+After migration, restart the API and Worker so they use the new defaults, or set
+`MOZHI_TASK_STORE_PATH`, `MOZHI_WORKER_STATE_DIR`, `MOZHI_API_LOG_DIR`, and
+`MOZHI_WORKER_LOG_DIR` explicitly if an operator-managed path is preferred.

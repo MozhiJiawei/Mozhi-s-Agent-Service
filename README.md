@@ -55,19 +55,27 @@ The first implementation stage initializes the repository and records the
 aligned requirements for the briefing generation API. API and worker code will
 be added in later implementation stages.
 
-## Runtime Files And Secrets
+## Runtime Files, Scratch Files, And Secrets
 
-Agents and operators must keep secret material separate from runtime scratch
-files:
+Agents and operators must keep secret material, durable runtime state, and
+disposable scratch files separated:
 
 - Store API secrets only under
   `%USERPROFILE%\.mozhi-agent-service\api\`.
-- Store local runtime scratch files, logs, temporary task stores, and E2E
-  outputs under this repository's `.tmp/` directory.
+- Store service-owned durable runtime state under this repository's `.runtime/`
+  directory by default. This includes the API task queue, Worker state files,
+  API/Worker logs, and future monitor snapshots needed to resume or audit
+  in-flight work.
+- Store disposable scratch under this repository's `.tmp/` directory. This
+  includes test-generated outputs, one-off local verification artifacts, and
+  other files that are safe to delete at any time.
 - Do not put logs, JSONL task stores, generated source snapshots, or test
   outputs in `%USERPROFILE%\.mozhi-agent-service\api\`.
-- Do not commit `.tmp/` contents or any files from
+- Do not commit `.runtime/`, `.tmp/`, or any files from
   `%USERPROFILE%\.mozhi-agent-service\api\`.
+- Existing local files can be migrated with:
+  `Move-Item .tmp\api .runtime\api` and
+  `Move-Item .tmp\worker .runtime\worker`, after stopping the API and Worker.
 
 ## Local Monitoring
 

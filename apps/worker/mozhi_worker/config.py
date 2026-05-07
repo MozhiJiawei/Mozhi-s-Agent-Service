@@ -13,7 +13,19 @@ def repo_root() -> Path:
 
 
 def default_task_store_path() -> Path:
-    return repo_root() / ".tmp" / "api" / "tasks.jsonl"
+    return default_runtime_root() / "api" / "tasks.jsonl"
+
+
+def default_runtime_root() -> Path:
+    return repo_root() / ".runtime"
+
+
+def default_worker_state_dir() -> Path:
+    return default_runtime_root() / "worker" / "state"
+
+
+def default_worker_log_dir() -> Path:
+    return default_runtime_root() / "worker" / "logs"
 
 
 def default_agent_workspace_path() -> Path:
@@ -36,15 +48,16 @@ class WorkerSettings:
 
     @classmethod
     def from_env(cls) -> "WorkerSettings":
-        root = repo_root()
         return cls(
             repository=os.environ.get("GITHUB_REPOSITORY", DEFAULT_REPOSITORY),
             github_token=os.environ.get("GITHUB_TOKEN"),
             task_store_path=Path(
                 os.environ.get("MOZHI_TASK_STORE_PATH", default_task_store_path())
             ),
-            state_dir=Path(os.environ.get("MOZHI_WORKER_STATE_DIR", root / ".tmp" / "worker" / "state")),
-            log_dir=Path(os.environ.get("MOZHI_WORKER_LOG_DIR", root / ".tmp" / "worker" / "logs")),
+            state_dir=Path(
+                os.environ.get("MOZHI_WORKER_STATE_DIR", default_worker_state_dir())
+            ),
+            log_dir=Path(os.environ.get("MOZHI_WORKER_LOG_DIR", default_worker_log_dir())),
             agent_workspace=Path(
                 os.environ.get("MOZHI_AGENT_WORKSPACE", default_agent_workspace_path())
             ),

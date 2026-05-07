@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .main import Settings
+from .main import Settings, default_runtime_root
 
 
 SERVICE_TIMEZONE = timezone(timedelta(hours=8))
@@ -44,14 +44,15 @@ class MonitorPaths:
     @classmethod
     def from_settings(cls, settings: Settings) -> "MonitorPaths":
         root = repo_root()
+        runtime_root = default_runtime_root()
         return cls(
             task_store_path=settings.task_store_path,
             state_dir=Path(
-                os.environ.get("MOZHI_WORKER_STATE_DIR", root / ".tmp" / "worker" / "state")
+                os.environ.get("MOZHI_WORKER_STATE_DIR", runtime_root / "worker" / "state")
             ),
-            api_log_dir=Path(os.environ.get("MOZHI_API_LOG_DIR", root / ".tmp" / "api" / "logs")),
+            api_log_dir=Path(os.environ.get("MOZHI_API_LOG_DIR", runtime_root / "api" / "logs")),
             worker_log_dir=Path(
-                os.environ.get("MOZHI_WORKER_LOG_DIR", root / ".tmp" / "worker" / "logs")
+                os.environ.get("MOZHI_WORKER_LOG_DIR", runtime_root / "worker" / "logs")
             ),
             agent_workspace=Path(
                 os.environ.get(
