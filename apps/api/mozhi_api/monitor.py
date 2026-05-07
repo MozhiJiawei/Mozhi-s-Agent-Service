@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import urllib.error
@@ -28,6 +29,12 @@ ALL_KNOWN_STATUSES = CURRENT_STATUSES | TERMINAL_STATUSES
 DEFAULT_STALE_AFTER_MINUTES = 30
 SOURCE_PREVIEW_CHARS = 240
 TITLE_CHARS = 160
+AGENT_WORKSPACE_EXTRA_REQUIRED_PATHS = [
+    Path("skills/hw-ppt-gen/SKILL.md"),
+    Path("skills/hw-ppt-gen/scripts/pptx/export_pptx_images.js"),
+]
+
+
 @dataclass(frozen=True)
 class MonitorPaths:
     task_store_path: Path
@@ -352,7 +359,7 @@ def build_health_checks(paths: MonitorPaths, diagnostics: list[dict[str, str]]) 
     checks = [
         path_check("task_store", "任务队列文件", paths.task_store_path, file_ok=True),
         path_check("worker_state", "Worker 状态目录", paths.state_dir, dir_ok=True),
-        path_check("agent_workspace", "AgentWorkspace", paths.agent_workspace, dir_ok=True),
+        agent_workspace_health_check(paths.agent_workspace),
         path_check("briefings", "归档目录", paths.repo_root / "briefings", dir_ok=True),
         git_lfs_check(paths.repo_root / ".gitattributes"),
         frpc_container_check(paths.frpc_container_name),
@@ -386,6 +393,134 @@ def path_check(
     if dir_ok and path.is_dir():
         return {"id": check_id, "label": label, "status": "pass", "message": f"可读取：{path}"}
     return {"id": check_id, "label": label, "status": "fail", "message": f"路径类型异常：{path}"}
+
+
+def agent_workspace_health_check(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "warn",
+            "message": f"缺失：{path}",
+        }
+    if not path.is_dir():
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "fail",
+            "message": f"路径类型异常：{path}",
+        }
+
+    agents_path = path / "AGENTS.md"
+    if not agents_path.is_file():
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "fail",
+            "message": (
+                f"缺少 AgentWorkspace 约定文件：{agents_path}。"
+                "请确认子仓已克隆，并运行：git -C AgentWorkspace submodule update --init --recursive"
+            ),
+        }
+
+    try:
+        agents_text = agents_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "fail",
+            "message": f"无法读取 AgentWorkspace/AGENTS.md：{exc}",
+        }
+
+    registered_skill_paths = parse_registered_skill_paths(agents_text)
+    if not registered_skill_paths:
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "fail",
+            "message": "AgentWorkspace/AGENTS.md 未声明任何 skills/*/SKILL.md 加载路径。",
+        }
+
+    missing = []
+    missing.extend(
+        f"registered skill {required.as_posix()}"
+        for required in registered_skill_paths
+        if not (path / required).is_file()
+    )
+    missing.extend(
+        f"worker dependency {required.as_posix()}"
+        for required in AGENT_WORKSPACE_EXTRA_REQUIRED_PATHS
+        if not (path / required).is_file()
+    )
+
+    gitmodules_path = path / ".gitmodules"
+    if gitmodules_path.is_file():
+        try:
+            submodule_paths = parse_gitmodule_paths(gitmodules_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            return {
+                "id": "agent_workspace",
+                "label": "AgentWorkspace",
+                "status": "fail",
+                "message": f"无法读取 AgentWorkspace/.gitmodules：{exc}",
+            }
+        missing.extend(
+            f"submodule {submodule_path.as_posix()}"
+            for submodule_path in submodule_paths
+            if not populated_directory(path / submodule_path)
+        )
+
+    if missing:
+        return {
+            "id": "agent_workspace",
+            "label": "AgentWorkspace",
+            "status": "fail",
+            "message": (
+                f"AgentWorkspace 未完整初始化，缺少：{', '.join(dedupe(missing))}。"
+                "请运行：git -C AgentWorkspace submodule update --init --recursive"
+            ),
+        }
+
+    return {
+        "id": "agent_workspace",
+        "label": "AgentWorkspace",
+        "status": "pass",
+        "message": f"已初始化：{path}；注册 skills：{len(registered_skill_paths)}",
+    }
+
+
+def parse_registered_skill_paths(agents_text: str) -> list[Path]:
+    matches = re.findall(r"`(skills/[^`]+/SKILL\.md)`", agents_text)
+    return [Path(match) for match in dedupe(matches)]
+
+
+def parse_gitmodule_paths(gitmodules_text: str) -> list[Path]:
+    matches = re.findall(r"(?m)^\s*path\s*=\s*(.+?)\s*$", gitmodules_text)
+    return [Path(match) for match in dedupe(matches)]
+
+
+def populated_directory(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    try:
+        next(path.iterdir())
+    except StopIteration:
+        return False
+    except OSError:
+        return False
+    return True
+
+
+def dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        unique.append(value)
+    return unique
 
 
 def git_lfs_check(path: Path) -> dict[str, str]:
