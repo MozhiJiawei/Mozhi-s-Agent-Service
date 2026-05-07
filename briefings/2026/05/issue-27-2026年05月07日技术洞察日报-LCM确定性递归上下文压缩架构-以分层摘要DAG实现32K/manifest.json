@@ -1,0 +1,36 @@
+{
+  "archive_path": "briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K",
+  "artifacts": [
+    {
+      "artifact_id": "source",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/source.md",
+      "kind": "source",
+      "logical_path": "briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/source.md",
+      "sha256": "7e4b61d9495561405b046f4d3c8135e56c7f4091a922faeacb904891061e115e",
+      "size_bytes": 4772,
+      "storage_backend": "git"
+    },
+    {
+      "artifact_id": "pptx-main",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/brief.pptx",
+      "kind": "pptx",
+      "logical_path": "briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/brief.pptx",
+      "sha256": "ca1c28b2744a284ab8d49f6bf783bc1314658e4200ab1afc925bd24a90018878",
+      "size_bytes": 375897,
+      "storage_backend": "git_lfs"
+    },
+    {
+      "artifact_id": "qa-summary",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/qa-summary.md",
+      "kind": "qa_summary",
+      "logical_path": "briefings/2026/05/issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K/qa-summary.md",
+      "sha256": "a2136e64b364dd87308eb136e6c3f82eaa5d2c37e017938a9ebf7dad70a54566",
+      "size_bytes": 277,
+      "storage_backend": "git"
+    }
+  ],
+  "branch": "codex/briefing-issue-27-2026年05月07日技术洞察日报-LCM确定性递归上下文压缩架构-以分层摘要DAG实现32K",
+  "issue_number": 27,
+  "request_id": "brf_20260507193635_f481b0",
+  "title": "【2026年05月07日技术洞察日报】LCM确定性递归上下文压缩架构：以分层摘要DAG实现32K-1M tokens长上下文无损记忆，Volt编码智能体OOLONG评测超越Clau…"
+}
