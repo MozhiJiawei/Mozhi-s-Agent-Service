@@ -101,6 +101,42 @@ def prepare_paths(paths: MonitorPaths) -> None:
     paths.api_log_dir.mkdir(parents=True, exist_ok=True)
     paths.worker_log_dir.mkdir(parents=True, exist_ok=True)
     paths.agent_workspace.mkdir(parents=True, exist_ok=True)
+    (paths.agent_workspace / "AGENTS.md").write_text(
+        "\n".join(
+            [
+                "# AGENTS.md",
+                "",
+                "## Registered Skills",
+                "",
+                "### `skills/hw-ppt-gen`",
+                "",
+                "- 加载路径：`skills/hw-ppt-gen/SKILL.md`",
+                "- skill 名称：`huawei-pptx-generator`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (paths.agent_workspace / ".gitmodules").write_text(
+        "[submodule \"skills/hw-ppt-gen\"]\n\tpath = skills/hw-ppt-gen\n",
+        encoding="utf-8",
+    )
+    (paths.agent_workspace / "skills" / "hw-ppt-gen" / "scripts" / "pptx").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (paths.agent_workspace / "skills" / "hw-ppt-gen" / "SKILL.md").write_text(
+        "# hw-ppt-gen\n",
+        encoding="utf-8",
+    )
+    (
+        paths.agent_workspace
+        / "skills"
+        / "hw-ppt-gen"
+        / "scripts"
+        / "pptx"
+        / "export_pptx_images.js"
+    ).write_text("// exporter\n", encoding="utf-8")
     (paths.repo_root / "briefings").mkdir(parents=True, exist_ok=True)
     (paths.repo_root / ".gitattributes").write_text(
         "briefings/**/*.pptx filter=lfs diff=lfs merge=lfs -text\n",
@@ -238,6 +274,110 @@ def test_gitattributes_lfs_rule_marks_health_as_passing(tmp_path):
     snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
 
     assert any(check["id"] == "git_lfs" and check["status"] == "pass" for check in snapshot["health"])
+
+
+def test_agent_workspace_with_required_submodule_files_passes_health(tmp_path):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+
+    snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
+
+    assert any(
+        check["id"] == "agent_workspace" and check["status"] == "pass"
+        for check in snapshot["health"]
+    )
+
+
+def test_agent_workspace_missing_submodule_files_fails_health(tmp_path):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    (
+        paths.agent_workspace
+        / "skills"
+        / "hw-ppt-gen"
+        / "scripts"
+        / "pptx"
+        / "export_pptx_images.js"
+    ).unlink()
+
+    snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
+
+    check = next(check for check in snapshot["health"] if check["id"] == "agent_workspace")
+    assert check["status"] == "fail"
+    assert "skills/hw-ppt-gen/scripts/pptx/export_pptx_images.js" in check["message"]
+    assert "git -C AgentWorkspace submodule update --init --recursive" in check["message"]
+
+
+def test_agent_workspace_uses_agents_registered_skill_paths_for_health(tmp_path):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    (paths.agent_workspace / "AGENTS.md").write_text(
+        "\n".join(
+            [
+                "# AGENTS.md",
+                "",
+                "## Registered Skills",
+                "",
+                "### `skills/hw-ppt-gen`",
+                "- 加载路径：`skills/hw-ppt-gen/SKILL.md`",
+                "",
+                "### `skills/new-dynamic-skill`",
+                "- 加载路径：`skills/new-dynamic-skill/SKILL.md`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    missing_snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
+
+    missing_check = next(
+        check for check in missing_snapshot["health"] if check["id"] == "agent_workspace"
+    )
+    assert missing_check["status"] == "fail"
+    assert "registered skill skills/new-dynamic-skill/SKILL.md" in missing_check["message"]
+
+    (paths.agent_workspace / "skills" / "new-dynamic-skill").mkdir(parents=True)
+    (paths.agent_workspace / "skills" / "new-dynamic-skill" / "SKILL.md").write_text(
+        "# new dynamic skill\n",
+        encoding="utf-8",
+    )
+
+    passing_snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
+
+    passing_check = next(
+        check for check in passing_snapshot["health"] if check["id"] == "agent_workspace"
+    )
+    assert passing_check["status"] == "pass"
+    assert "注册 skills：2" in passing_check["message"]
+
+
+def test_agent_workspace_reports_unpopulated_gitmodules_submodule(tmp_path):
+    settings = settings_for(tmp_path)
+    paths = paths_for(tmp_path, settings)
+    prepare_paths(paths)
+    (paths.agent_workspace / ".gitmodules").write_text(
+        "\n".join(
+            [
+                "[submodule \"skills/hw-ppt-gen\"]",
+                "\tpath = skills/hw-ppt-gen",
+                "[submodule \"skills/empty-skill\"]",
+                "\tpath = skills/empty-skill",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (paths.agent_workspace / "skills" / "empty-skill").mkdir(parents=True)
+
+    snapshot = build_monitor_snapshot(settings, paths=paths, now=NOW)
+
+    check = next(check for check in snapshot["health"] if check["id"] == "agent_workspace")
+    assert check["status"] == "fail"
+    assert "submodule skills/empty-skill" in check["message"]
 
 
 def test_snapshot_includes_edge_and_reverse_proxy_health_checks(tmp_path):

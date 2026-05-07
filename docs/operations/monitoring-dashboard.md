@@ -103,6 +103,12 @@ warning or failure.
 - Missing worker state directory: the worker has not started yet, or
   `MOZHI_WORKER_STATE_DIR` points somewhere else.
 - Missing AgentWorkspace: `MOZHI_AGENT_WORKSPACE` does not exist on this host.
+- Incomplete AgentWorkspace submodules: the monitor reads
+  `AgentWorkspace/AGENTS.md`, verifies every registered `skills/*/SKILL.md`
+  loading path, checks populated `.gitmodules` paths, and verifies the current
+  worker's PPT export dependency. Initialize the repo-local workspace with
+  `git -C AgentWorkspace submodule update --init --recursive` when it reports
+  missing skill files or submodule directories.
 - Missing Git LFS tracking: `.gitattributes` does not contain
   `briefings/**/*.pptx filter=lfs diff=lfs merge=lfs -text`.
 - Stale task: an in-progress task has not refreshed `updated_at` for more than
