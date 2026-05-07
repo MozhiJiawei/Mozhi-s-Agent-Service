@@ -394,11 +394,10 @@ def default_worker_log_dir() -> Path:
 class WorkerLauncher:
     def __init__(self, root: Path) -> None:
         self.root = root
+        self.registry_dir = self.root / ".tmp" / "worker" / "processes"
 
     def running(self) -> list[dict[str, Any]]:
-        if os.name == "nt":
-            return self.running_windows()
-        return []
+        return self.running_registered()
 
     def launch(self, action: str, request_id: str | None = None) -> dict[str, Any]:
         command = self.command_for(action, request_id)
@@ -423,6 +422,14 @@ class WorkerLauncher:
         finally:
             stdout.close()
             stderr.close()
+        self.write_registry(
+            pid=process.pid,
+            action=action,
+            request_id=request_id,
+            command=command,
+            stdout_log=stdout_path,
+            stderr_log=stderr_path,
+        )
         return {
             "pid": process.pid,
             "action": action,
@@ -459,53 +466,88 @@ class WorkerLauncher:
                 raise OSError(completed.stderr.strip() or completed.stdout.strip())
         else:
             os.kill(pid, 15)
+        self.registry_path(pid).unlink(missing_ok=True)
         return {"pid": pid, "status": "stopped", "process": running[pid]}
 
-    def running_windows(self) -> list[dict[str, Any]]:
-        command = (
-            "Get-CimInstance Win32_Process | "
-            "Where-Object { $_.CommandLine -match 'mozhi_worker\\.cli' -and $_.CommandLine -match ' run( |$)' } | "
-            "Select-Object ProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress"
-        )
-        completed = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", command],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-        )
-        if completed.returncode != 0 or not completed.stdout.strip():
-            return []
-        try:
-            raw = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return []
-        records = raw if isinstance(raw, list) else [raw]
-        return [
-            self.describe_process(record)
-            for record in records
-            if isinstance(record, dict) and record.get("ProcessId")
-        ]
+    def registry_path(self, pid: int) -> Path:
+        return self.registry_dir / f"{pid}.json"
 
-    def describe_process(self, record: dict[str, Any]) -> dict[str, Any]:
-        command_line = str(record.get("CommandLine") or "")
-        action = "forever"
-        if "--once" in command_line:
-            action = "once"
-        elif "--drain" in command_line:
-            action = "drain"
-        request_id = None
-        match = re.search(r"--request-id\s+([^\s]+)", command_line)
-        if match:
-            request_id = match.group(1)
-        return {
-            "pid": int(record["ProcessId"]),
+    def write_registry(
+        self,
+        *,
+        pid: int,
+        action: str,
+        request_id: str | None,
+        command: list[str],
+        stdout_log: Path,
+        stderr_log: Path,
+    ) -> None:
+        self.registry_dir.mkdir(parents=True, exist_ok=True)
+        record = {
+            "pid": pid,
             "action": action,
             "request_id": request_id,
-            "command": command_line,
-            "started_at": str(record.get("CreationDate") or ""),
+            "command": " ".join(command),
+            "repo_root": str(self.root),
+            "started_at": now_service_time().isoformat(),
+            "stdout_log": str(stdout_log),
+            "stderr_log": str(stderr_log),
         }
+        self.registry_path(pid).write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def running_registered(self) -> list[dict[str, Any]]:
+        if not self.registry_dir.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        for path in sorted(self.registry_dir.glob("*.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+                pid = int(record["pid"])
+            except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                continue
+            if Path(str(record.get("repo_root") or "")) != self.root:
+                continue
+            if not self.pid_is_running(pid):
+                path.unlink(missing_ok=True)
+                continue
+            records.append(self.describe_registered_process(record))
+        return records
+
+    def describe_registered_process(self, record: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "pid": int(record["pid"]),
+            "action": str(record.get("action") or "forever"),
+            "request_id": record.get("request_id"),
+            "command": str(record.get("command") or ""),
+            "started_at": str(record.get("started_at") or ""),
+            "stdout_log": str(record.get("stdout_log") or ""),
+            "stderr_log": str(record.get("stderr_log") or ""),
+        }
+
+    def pid_is_running(self, pid: int) -> bool:
+        if os.name == "nt":
+            completed = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 0 }} else {{ exit 1 }}",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            return completed.returncode == 0
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        return True
 
 
 def create_app(

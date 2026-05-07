@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import mozhi_api.monitor as monitor
-from mozhi_api.main import JsonlTaskStore, Settings, create_app
+from mozhi_api.main import JsonlTaskStore, Settings, WorkerLauncher, create_app
 from mozhi_api.monitor import MonitorPaths, build_monitor_snapshot, monitor_html
 
 
@@ -385,6 +385,55 @@ def test_monitor_state_includes_running_workers(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["workers"]["running"][0]["pid"] == 4321
+
+
+def test_worker_launcher_lists_only_repo_local_registered_workers(tmp_path, monkeypatch):
+    root = tmp_path / "service-a"
+    other_root = tmp_path / "service-b"
+    launcher = WorkerLauncher(root)
+    launcher.write_registry(
+        pid=111,
+        action="forever",
+        request_id=None,
+        command=["python", "-m", "mozhi_worker.cli", "run"],
+        stdout_log=root / ".tmp" / "worker" / "logs" / "out.log",
+        stderr_log=root / ".tmp" / "worker" / "logs" / "err.log",
+    )
+    launcher.registry_dir.mkdir(parents=True, exist_ok=True)
+    (launcher.registry_dir / "222.json").write_text(
+        json.dumps(
+            {
+                "pid": 222,
+                "action": "forever",
+                "request_id": None,
+                "command": "python -m mozhi_worker.cli run",
+                "repo_root": str(other_root),
+                "started_at": "2026-05-07T10:00:00+08:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(launcher, "pid_is_running", lambda pid: True)
+
+    running = launcher.running()
+
+    assert [process["pid"] for process in running] == [111]
+
+
+def test_worker_launcher_prunes_stale_registered_workers(tmp_path, monkeypatch):
+    launcher = WorkerLauncher(tmp_path)
+    launcher.write_registry(
+        pid=333,
+        action="once",
+        request_id="brf_20260507093000_abc123",
+        command=["python", "-m", "mozhi_worker.cli", "run", "--once"],
+        stdout_log=tmp_path / ".tmp" / "worker" / "logs" / "out.log",
+        stderr_log=tmp_path / ".tmp" / "worker" / "logs" / "err.log",
+    )
+    monkeypatch.setattr(launcher, "pid_is_running", lambda pid: False)
+
+    assert launcher.running() == []
+    assert not launcher.registry_path(333).exists()
 
 
 def test_monitor_worker_start_supports_drain_and_forever(tmp_path):

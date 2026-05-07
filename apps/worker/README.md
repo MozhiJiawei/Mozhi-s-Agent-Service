@@ -15,7 +15,7 @@ Optional settings:
 ```powershell
 $env:GITHUB_REPOSITORY = "MozhiJiawei/Mozhi-s-Agent-Service"
 $env:MOZHI_TASK_STORE_PATH = "<repo>\.runtime\api\tasks.jsonl"
-$env:MOZHI_AGENT_WORKSPACE = "D:\Agent Repo\Mozhi-s-AgentWorkspace"
+$env:MOZHI_AGENT_WORKSPACE = "<repo>\AgentWorkspace"
 $env:MOZHI_CODEX_TIMEOUT_SECONDS = "7200"
 $env:MOZHI_WORKER_POLL_SECONDS = "10"
 $env:MOZHI_GIT_REMOTE = "origin"
@@ -25,6 +25,10 @@ $env:MOZHI_BASE_BRANCH = "main"
 Durable Worker state, logs, and locks belong under `.runtime\worker\` and must
 not be committed. Disposable generation scratch remains in the external
 AgentWorkspace `.tmp\mozhi-service\<request_id>\` directory.
+
+By default, each service clone expects its own AgentWorkspace clone under
+`<repo>\AgentWorkspace`. This keeps development and production worker runtime
+files from sharing `AgentWorkspace\.tmp\mozhi-service`.
 
 ## Run
 

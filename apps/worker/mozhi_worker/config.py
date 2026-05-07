@@ -6,7 +6,6 @@ from pathlib import Path
 
 
 DEFAULT_REPOSITORY = "MozhiJiawei/Mozhi-s-Agent-Service"
-DEFAULT_AGENT_WORKSPACE = r"D:\Agent Repo\Mozhi-s-AgentWorkspace"
 
 
 def repo_root() -> Path:
@@ -27,6 +26,10 @@ def default_worker_state_dir() -> Path:
 
 def default_worker_log_dir() -> Path:
     return default_runtime_root() / "worker" / "logs"
+
+
+def default_agent_workspace_path() -> Path:
+    return repo_root() / "AgentWorkspace"
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,7 @@ class WorkerSettings:
             ),
             log_dir=Path(os.environ.get("MOZHI_WORKER_LOG_DIR", default_worker_log_dir())),
             agent_workspace=Path(
-                os.environ.get("MOZHI_AGENT_WORKSPACE", DEFAULT_AGENT_WORKSPACE)
+                os.environ.get("MOZHI_AGENT_WORKSPACE", default_agent_workspace_path())
             ),
             codex_model=os.environ.get("MOZHI_CODEX_MODEL", "gpt-5.5"),
             codex_timeout_seconds=int(os.environ.get("MOZHI_CODEX_TIMEOUT_SECONDS", "7200")),

@@ -413,7 +413,7 @@ flowchart TB
     workerTmp[".runtime/worker\nstate + logs"]
     archives["briefings/\nfinal archives"]
     localSecrets["%USERPROFILE%\\.mozhi-agent-service\\api\napi-token + github-token"]
-    agentWorkspace["Mozhi-s-AgentWorkspace\nD:\\Agent Repo\\Mozhi-s-AgentWorkspace"]
+    agentWorkspace["Mozhi-s-AgentWorkspace\n<service repo>\\AgentWorkspace"]
     workspaceTmp["AgentWorkspace .tmp\nCodex/PPT runtime files"]
 
     serviceRepo --> apiProc
@@ -444,7 +444,7 @@ flowchart TB
 - 本仓库 `.runtime/` 保存服务运行态文件，必须被视为本地持久状态，不提交。
 - 本仓库 `.tmp/` 只保存可删除 scratch，例如本地验证输出和测试临时文件。
 - `%USERPROFILE%\.mozhi-agent-service\api\` 只保存 secret，不保存日志、任务队列、测试输出或 scratch 产物。
-- `Mozhi-s-AgentWorkspace/.tmp/` 保存生成过程文件；本仓库只接收最终 curated artifacts。
+- 每个 Service clone 默认使用其下的 `AgentWorkspace/` 子仓；`AgentWorkspace/.tmp/` 保存生成过程文件；本仓库只接收最终 curated artifacts。
 - GitHub 是外部可见状态与代码归档平台，不是 Worker 的唯一恢复事实源。
 
 ## 架构元素
