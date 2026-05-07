@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from mozhi_worker import cli as worker_cli
 from mozhi_worker.archive import Archiver, archive_relative_dir, sha256_file
 from mozhi_worker.codex_runner import build_codex_prompt, codex_command, handoff_contract, load_handoff, status_script
-from mozhi_worker.config import WorkerSettings
+from mozhi_worker.config import WorkerSettings, default_agent_workspace_path, repo_root
 from mozhi_worker.git_publish import FakeGitPublisher, branch_name_for, ensure_lfs_tracking
 from mozhi_worker.issue import FakeIssueClient, IssueUpdateError, comment_issue_milestone, completed_details
 from mozhi_worker.models import GenerationRecord, IssueRef, QaResult, Task, WorkerError
@@ -556,6 +556,18 @@ def test_worker_cli_drain_runs_until_no_queued_tasks(monkeypatch, tmp_path, caps
     assert exit_code == 0
     assert calls == [None, None, None]
     assert json.loads(capsys.readouterr().out)["processed"] == 2
+
+
+def test_worker_default_agent_workspace_is_repo_local(monkeypatch):
+    monkeypatch.delenv("MOZHI_AGENT_WORKSPACE", raising=False)
+    monkeypatch.setenv("MOZHI_TASK_STORE_PATH", "tasks.jsonl")
+    monkeypatch.setenv("MOZHI_WORKER_STATE_DIR", "state")
+    monkeypatch.setenv("MOZHI_WORKER_LOG_DIR", "logs")
+
+    settings = WorkerSettings.from_env()
+
+    assert default_agent_workspace_path() == repo_root() / "AgentWorkspace"
+    assert settings.agent_workspace == default_agent_workspace_path()
 
 
 def test_worker_fake_qa_failure_does_not_publish(tmp_path):

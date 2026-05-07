@@ -56,7 +56,7 @@ class MonitorPaths:
             agent_workspace=Path(
                 os.environ.get(
                     "MOZHI_AGENT_WORKSPACE",
-                    r"D:\Agent Repo\Mozhi-s-AgentWorkspace",
+                    root / "AgentWorkspace",
                 )
             ),
             repo_root=root,
