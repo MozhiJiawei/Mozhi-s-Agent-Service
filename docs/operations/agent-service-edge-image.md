@@ -31,6 +31,23 @@ Desktop running:
 .\scripts\ecs\save-agent-service-edge-image.ps1
 ```
 
+On a Linux host with Docker installed, build the same image directly on the
+server with the bash equivalent of the PowerShell build script:
+
+```bash
+bash scripts/ecs/build-agent-service-edge-image.sh \
+  --image-name mozhi-agent-service-edge \
+  --image-tag local \
+  --platform linux/amd64
+```
+
+This avoids building the image on Windows, saving it as a tar archive, and
+uploading that archive for every server-side iteration. Extra Docker build args
+can be passed with repeated `--build-arg KEY=VALUE` options.
+
+If the ECS host cannot reach Docker Hub, configure a Docker registry mirror on
+the host or pass a reachable Ubuntu mirror with `--base-image`.
+
 The test starts only one Docker container for the edge image. It also runs a
 host-side Python mock desktop health service. For tunnel verification, the
 script uses `docker exec` to start the image's bundled `frpc` inside that same

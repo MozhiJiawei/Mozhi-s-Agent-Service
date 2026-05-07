@@ -97,3 +97,19 @@ Current desktop API secret files:
   api-token.txt
   github-token.txt
 ```
+
+## Linux Docker Build
+
+The repository currently ships a Docker image for the ECS edge gateway
+(`mozhi-agent-service-edge`). On Linux servers, build it from the repository
+root with:
+
+```bash
+bash scripts/ecs/build-agent-service-edge-image.sh --image-tag local
+```
+
+This is the Linux counterpart to
+`scripts/ecs/build-agent-service-edge-image.ps1` and avoids repeatedly
+transferring image tar archives during server-side iteration. API and worker
+Docker targets are reserved for future Dockerfiles; the current runtime
+architecture keeps them outside the edge image.
