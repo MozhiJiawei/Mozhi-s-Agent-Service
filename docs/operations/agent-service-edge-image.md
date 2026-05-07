@@ -66,12 +66,33 @@ docker load -i mozhi-agent-service-edge-local.tar
 docker run -d --name mozhi-agent-service-edge \
   --restart unless-stopped \
   -p 80:80 -p 443:443 -p 7000:7000 \
-  -e DOMAIN=<domain> \
+  -e CADDY_HTTP_SITE_ADDRESS=:80 \
+  -e CADDY_HTTPS_SITE_ADDRESS=https://39.105.78.135 \
+  -e CADDY_TLS_MODE=internal \
   -e FRP_TOKEN=<token> \
   -e FRP_BIND_PORT=7000 \
   -e HEALTH_PROXY_PORT=18081 \
+  -e DESKTOP_API_PROXY_PORT=18081 \
   -v mozhi-caddy-data:/data \
   mozhi-agent-service-edge:local
+```
+
+This public-IP HTTPS mode makes Caddy listen on container port `443` and serve
+an internal certificate for the public IP. Use it to prove that the edge HTTPS
+path reaches the desktop API:
+
+```bash
+curl -k https://39.105.78.135/health
+```
+
+Because the certificate is internal, public-IP callers must use `-k` or an
+equivalent "insecure TLS" option. For real caller traffic without `-k`, point a
+domain at the ECS host and switch to automatic public certificates:
+
+```text
+CADDY_HTTP_SITE_ADDRESS=:80
+CADDY_HTTPS_SITE_ADDRESS=<domain>
+CADDY_TLS_MODE=auto
 ```
 
 Delete the uploaded tar after `docker load` succeeds:
@@ -135,13 +156,25 @@ the original health check tunnel. When `/health` and `/api/*` share the same
 desktop FastAPI service, both values may remain `18081`.
 
 `/api/*` carries bearer credentials and should not be used over the public
-HTTP-by-IP path. Keep HTTP-by-IP validation to `/health` until domain HTTPS is
-available.
+HTTP-by-IP path. Keep HTTP-by-IP validation to `/health` unless you are doing a
+short-lived end-to-end check with a disposable token.
 
 For a one-off public-IP HTTP E2E check before domain HTTPS is available, set
 `ALLOW_HTTP_API=true` on the ECS edge container and send
 `X-Mozhi-Allow-Http-Api: true` with the request. Do not share production tokens
 through this path; use a short-lived validation token only.
+
+For a one-off public-IP HTTPS E2E check before domain certificates are
+available, keep `CADDY_HTTPS_SITE_ADDRESS=https://39.105.78.135` and
+`CADDY_TLS_MODE=internal`, then add `-k` to the curl command:
+
+```bash
+curl -k -i -sS -X POST "https://39.105.78.135/api/briefings" \
+  -H "Authorization: Bearer <short-lived-token>" \
+  -H "Content-Type: text/plain; charset=utf-8" \
+  -H "X-Mozhi-Title: test" \
+  --data-binary "test source"
+```
 
 ## Disk Notes
 

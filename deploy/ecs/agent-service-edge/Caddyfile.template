@@ -1,8 +1,9 @@
 {
 	admin off
+	auto_https disable_redirects
 }
 
-${CADDY_SITE_ADDRESS} {
+${CADDY_HTTP_SITE_ADDRESS} {
 	encode zstd gzip
 
 	handle /health {
@@ -17,6 +18,26 @@ ${CADDY_SITE_ADDRESS} {
 
 	handle @api_blocked_cleartext {
 		respond "API requires HTTPS" 426
+	}
+
+	handle /api/* {
+		request_body {
+			max_size ${API_MAX_BODY_SIZE}
+		}
+		reverse_proxy 127.0.0.1:${DESKTOP_API_PROXY_PORT}
+	}
+
+	handle {
+		respond "Mozhi Agent Service edge gateway" 404
+	}
+}
+
+${CADDY_HTTPS_SITE_ADDRESS} {
+${CADDY_TLS_DIRECTIVE}
+	encode zstd gzip
+
+	handle /health {
+		reverse_proxy 127.0.0.1:${HEALTH_PROXY_PORT}
 	}
 
 	handle /api/* {
