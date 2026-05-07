@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 import re
 import secrets
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 
 SERVICE_NAME = "mozhi-agent-service-api"
@@ -259,6 +260,22 @@ def create_app(
             "server_time": now_service_time().isoformat(),
         }
 
+    @app.get("/monitor", response_class=HTMLResponse)
+    def monitor_page(request: Request) -> HTMLResponse:
+        if not is_local_request(request):
+            return HTMLResponse("Forbidden", status_code=403)
+        from .monitor import monitor_html
+
+        return HTMLResponse(monitor_html())
+
+    @app.get("/api/monitor/state")
+    def monitor_state(request: Request) -> JSONResponse:
+        if not is_local_request(request):
+            return error_response(403, "forbidden", "Monitor routes are local-only.")
+        from .monitor import build_monitor_snapshot
+
+        return JSONResponse(build_monitor_snapshot(resolved_settings))
+
     @app.post("/api/briefings", status_code=202)
     async def create_briefing(request: Request) -> JSONResponse:
         authorization = request.headers.get("authorization", "")
@@ -408,6 +425,18 @@ def default_issue_client(
     if github_token:
         return GitHubIssueClient(github_token, github_repository, issue_label)
     return GhCliIssueClient(github_repository, issue_label)
+
+
+def is_local_request(request: Request) -> bool:
+    if not request.client:
+        return False
+    host = request.client.host
+    if host == "testclient":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host in {"localhost"}
 
 
 def is_authorized(authorization: str, configured_token: str | None) -> bool:

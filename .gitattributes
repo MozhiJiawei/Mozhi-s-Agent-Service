@@ -5,4 +5,5 @@ Dockerfile text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.ps1 text eol=crlf
+briefings/**/*.pptx filter=lfs diff=lfs merge=lfs -text
 
