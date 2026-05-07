@@ -14,6 +14,7 @@ from mozhi_api.main import (
     Settings,
     create_app,
     default_issue_client,
+    parse_header_title,
 )
 
 
@@ -128,6 +129,18 @@ def test_valid_plain_text_request_creates_issue_and_queues_task():
     suffix = task_store.tasks[0]["request_id"].rsplit("_", 1)[-1]
     assert issue_client.created_issues[0]["title"] == f"AI Agent 商业化进展汇报 ({suffix})"
     assert issue_client.created_issues[0]["body"].count("任意材料") == 1
+
+
+def test_raw_utf8_header_title_is_recovered_from_latin1_mojibake():
+    raw_title = "暗黑破坏神4 憎恨之王DLC".encode("utf-8").decode("latin-1")
+
+    assert parse_header_title(raw_title) == "暗黑破坏神4 憎恨之王DLC"
+
+
+def test_percent_encoded_header_title_still_decodes_as_utf8():
+    raw_title = urllib.parse.quote("暗黑破坏神4 憎恨之王DLC")
+
+    assert parse_header_title(raw_title) == "暗黑破坏神4 憎恨之王DLC"
 
 
 def test_request_ids_and_issue_times_use_utc_plus_8(monkeypatch):
@@ -281,7 +294,7 @@ def test_task_store_failure_returns_error_after_issue_creation():
     assert "was not queued" in issue_client.failed_issues[0]["message"]
 
 
-def test_long_source_is_truncated_in_issue_but_preserved_in_task_store():
+def test_long_source_is_preserved_in_issue_and_task_store():
     client, issue_client, task_store = build_client()
     source = "A" * 1300
 
@@ -297,8 +310,28 @@ def test_long_source_is_truncated_in_issue_but_preserved_in_task_store():
 
     assert response.status_code == 202
     assert task_store.tasks[0]["source_text"] == source
+    assert "[truncated]" not in issue_client.created_issues[0]["body"]
+    assert "A" * 1300 in issue_client.created_issues[0]["body"]
+
+
+def test_very_long_source_is_truncated_in_issue_but_preserved_in_task_store():
+    client, issue_client, task_store = build_client()
+    source = "A" * 61000
+
+    response = client.post(
+        "/api/briefings",
+        headers={
+            "Authorization": "Bearer secret-token",
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Mozhi-Title": "Long report",
+        },
+        content=source,
+    )
+
+    assert response.status_code == 202
+    assert task_store.tasks[0]["source_text"] == source
     assert "[truncated]" in issue_client.created_issues[0]["body"]
-    assert "A" * 1300 not in issue_client.created_issues[0]["body"]
+    assert "A" * 61000 not in issue_client.created_issues[0]["body"]
 
 
 def test_rejects_non_utf8_charset():

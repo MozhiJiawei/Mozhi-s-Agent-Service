@@ -22,7 +22,7 @@ SERVICE_NAME = "mozhi-agent-service-api"
 SERVICE_VERSION = "0.2.0"
 DEFAULT_REPOSITORY = "MozhiJiawei/Mozhi-s-Agent-Service"
 DEFAULT_ISSUE_LABEL = "agent-briefing"
-SOURCE_PREVIEW_CHARS = 1200
+SOURCE_PREVIEW_CHARS = 60000
 DEFAULT_MAX_SOURCE_BYTES = 1024 * 1024
 SERVICE_TIMEZONE = timezone(timedelta(hours=8))
 _task_store_lock = threading.Lock()
@@ -435,7 +435,12 @@ def format_issue_title(title: str, request_id: str) -> str:
 
 
 def parse_header_title(raw_title: str) -> str:
-    return urllib.parse.unquote(raw_title.strip(), encoding="utf-8", errors="replace").strip()
+    stripped = raw_title.strip()
+    try:
+        stripped = stripped.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        pass
+    return urllib.parse.unquote(stripped, encoding="utf-8", errors="replace").strip()
 
 
 def format_issue_body(
