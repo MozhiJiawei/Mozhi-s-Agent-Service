@@ -32,13 +32,17 @@ Optional settings:
 ```powershell
 $env:GITHUB_REPOSITORY = "MozhiJiawei/Mozhi-s-Agent-Service"
 $env:MOZHI_ISSUE_LABEL = "agent-briefing"
-$env:MOZHI_TASK_STORE_PATH = "<repo>\.tmp\api\tasks.jsonl"
+$env:MOZHI_TASK_STORE_PATH = "<repo>\.runtime\api\tasks.jsonl"
 $env:MOZHI_MAX_SOURCE_BYTES = "1048576"
 ```
 
-Runtime logs, temporary JSONL task stores, and E2E outputs belong under the
-repository `.tmp\api\` directory. `%USERPROFILE%\.mozhi-agent-service\api\`
+Durable runtime logs and JSONL task stores belong under the repository
+`.runtime\api\` directory by default. `%USERPROFILE%\.mozhi-agent-service\api\`
 should contain secret files only.
+
+Disposable E2E outputs and one-off verification artifacts should stay under
+`.tmp\`. It must be safe for operators to delete `.tmp\` without losing queued
+tasks or logs needed for diagnosis.
 
 ## Run
 

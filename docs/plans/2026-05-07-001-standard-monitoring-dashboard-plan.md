@@ -74,7 +74,7 @@ worker control plane, or replacement for GitHub Issues.
   log, AgentWorkspace, repository, and branch settings.
 - `apps/worker/mozhi_worker/task_store.py` reads queued tasks from JSONL.
 - `apps/worker/mozhi_worker/state.py` reads and writes per-request worker state
-  files under `.tmp/worker/state`.
+files under `.runtime/worker/state`.
 - `apps/worker/mozhi_worker/models.py` defines terminal and in-progress status
   groups.
 - `apps/worker/mozhi_worker/worker.py` records the status transitions the monitor
@@ -110,10 +110,10 @@ worker control plane, or replacement for GitHub Issues.
   non-local clients for both monitor routes.
 - Keep the page as server-owned static HTML/CSS/JavaScript: no separate React or
   Vite build in the first version.
-- Build the state model from existing files: merge `.tmp/api/tasks.jsonl` with
-  `.tmp/worker/state/*.json`, then derive system health and statistics from that
+- Build the state model from existing files: merge `.runtime/api/tasks.jsonl` with
+`.runtime/worker/state/*.json`, then derive system health and statistics from that
   read-only snapshot.
-- Treat `.tmp/worker/state/*.json` as authoritative for post-claim progress, and
+- Treat `.runtime/worker/state/*.json` as authoritative for post-claim progress, and
   task JSONL records as authoritative for queued tasks and request metadata.
 - Detect stuck tasks by rule: any in-progress task whose `updated_at` is older
   than a configurable threshold defaults to warning after 30 minutes.
@@ -171,9 +171,9 @@ flowchart LR
     Html["GET /monitor"]
     StateApi["GET /api/monitor/state"]
     Collector["Monitor snapshot collector"]
-    Tasks[".tmp/api/tasks.jsonl"]
-    State[".tmp/worker/state/*.json"]
-    Logs[".tmp/api and .tmp/worker logs"]
+  Tasks[".runtime/api/tasks.jsonl"]
+  State[".runtime/worker/state/*.json"]
+  Logs[".runtime/api and .runtime/worker logs"]
     Briefings["briefings/**/manifest.json"]
     Env["Configured paths and git/LFS checks"]
 

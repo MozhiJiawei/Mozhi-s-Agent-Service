@@ -372,12 +372,23 @@ class JsonlTaskStore:
 
 
 def default_task_store_path() -> str:
-    repo_root = Path(__file__).resolve().parents[3]
-    return str(repo_root / ".tmp" / "api" / "tasks.jsonl")
+    return str(default_runtime_root() / "api" / "tasks.jsonl")
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
+
+
+def default_runtime_root() -> Path:
+    return repo_root() / ".runtime"
+
+
+def default_worker_state_dir() -> Path:
+    return default_runtime_root() / "worker" / "state"
+
+
+def default_worker_log_dir() -> Path:
+    return default_runtime_root() / "worker" / "logs"
 
 
 class WorkerLauncher:
@@ -393,7 +404,7 @@ class WorkerLauncher:
         command = self.command_for(action, request_id)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.root / "apps" / "worker")
-        log_dir = self.root / ".tmp" / "worker" / "logs"
+        log_dir = Path(os.environ.get("MOZHI_WORKER_LOG_DIR", default_worker_log_dir()))
         log_dir.mkdir(parents=True, exist_ok=True)
         stamp = now_service_time().strftime("%Y%m%d-%H%M%S")
         stdout_path = log_dir / f"monitor-worker-{action}-{stamp}.out.log"
@@ -615,7 +626,7 @@ def create_app(
             return error_response(404, "task_not_found", "Task was not found.")
 
         state_dir = Path(
-            os.environ.get("MOZHI_WORKER_STATE_DIR", repo_root() / ".tmp" / "worker" / "state")
+            os.environ.get("MOZHI_WORKER_STATE_DIR", default_worker_state_dir())
         )
         state_path = state_dir / f"{request_id}.json"
         state = read_worker_state(state_path)
@@ -844,7 +855,7 @@ def is_task_currently_running(
         return True
     if state is None:
         state_dir = Path(
-            os.environ.get("MOZHI_WORKER_STATE_DIR", repo_root() / ".tmp" / "worker" / "state")
+            os.environ.get("MOZHI_WORKER_STATE_DIR", default_worker_state_dir())
         )
         state = read_worker_state(state_dir / f"{request_id}.json")
     return is_currently_running_state(state)

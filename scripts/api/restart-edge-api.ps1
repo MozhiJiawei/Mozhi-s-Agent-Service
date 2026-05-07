@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $apiRoot = Join-Path $repoRoot "apps\api"
-$runtimeRoot = Join-Path $repoRoot ".tmp\api"
+$runtimeRoot = Join-Path $repoRoot ".runtime\api"
 $logDir = Join-Path $runtimeRoot "logs"
 $secretRoot = Join-Path $env:USERPROFILE ".mozhi-agent-service\api"
 $apiTokenPath = Join-Path $secretRoot "api-token.txt"

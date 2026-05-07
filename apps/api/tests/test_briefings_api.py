@@ -13,6 +13,7 @@ from mozhi_api.main import (
     GitHubIssueCreateError,
     Settings,
     create_app,
+    default_task_store_path,
     default_issue_client,
     parse_header_title,
 )
@@ -81,6 +82,10 @@ def test_health_returns_service_status():
     assert response.status_code == 200
     assert response.json()["service"] == "mozhi-agent-service-api"
     assert response.json()["status"] == "ok"
+
+
+def test_default_task_store_path_uses_durable_runtime_dir():
+    assert Path(default_task_store_path()).parts[-3:] == (".runtime", "api", "tasks.jsonl")
 
 
 def test_default_issue_client_uses_gh_cli_when_github_token_is_missing():
