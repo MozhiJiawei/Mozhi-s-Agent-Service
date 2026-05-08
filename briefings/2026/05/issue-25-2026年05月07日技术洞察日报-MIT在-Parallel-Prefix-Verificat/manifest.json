@@ -1,0 +1,36 @@
+{
+  "archive_path": "briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat",
+  "artifacts": [
+    {
+      "artifact_id": "source",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/source.md",
+      "kind": "source",
+      "logical_path": "briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/source.md",
+      "sha256": "75c268c2f35d3ddca684fb0df064711f918ca8aa23d3307e3939db98ac64ccb1",
+      "size_bytes": 4183,
+      "storage_backend": "git"
+    },
+    {
+      "artifact_id": "pptx-main",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/brief.pptx",
+      "kind": "pptx",
+      "logical_path": "briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/brief.pptx",
+      "sha256": "41806336c5d3e53d7e09d2080bc2433792e38f255871b7b3b2265cacbee89f48",
+      "size_bytes": 667190,
+      "storage_backend": "git_lfs"
+    },
+    {
+      "artifact_id": "qa-summary",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/qa-summary.md",
+      "kind": "qa_summary",
+      "logical_path": "briefings/2026/05/issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat/qa-summary.md",
+      "sha256": "5474d164d295a538d4c8f0541d745421de3cc49665cf70b3a903034ca7bdc4e6",
+      "size_bytes": 452,
+      "storage_backend": "git"
+    }
+  ],
+  "branch": "codex/briefing-issue-25-2026年05月07日技术洞察日报-MIT在-Parallel-Prefix-Verificat",
+  "issue_number": 25,
+  "request_id": "brf_20260507175707_123a98",
+  "title": "【2026年05月07日技术洞察日报】MIT在“Parallel Prefix Verification for Speculative Generation”方向提出研究…"
+}
