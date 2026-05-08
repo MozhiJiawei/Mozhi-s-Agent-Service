@@ -1,4 +1,5 @@
-FROM ubuntu:24.04
+ARG BASE_IMAGE=ubuntu:24.04
+FROM ${BASE_IMAGE}
 
 ARG TARGETARCH
 ARG CADDY_VERSION=2.9.1
@@ -47,4 +48,3 @@ RUN chmod +x /usr/local/bin/mozhi-edge-entrypoint
 EXPOSE 80 443 7000
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/mozhi-edge-entrypoint"]
-

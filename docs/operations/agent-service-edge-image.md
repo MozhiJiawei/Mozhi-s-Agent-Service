@@ -31,6 +31,18 @@ Desktop running:
 .\scripts\ecs\save-agent-service-edge-image.ps1
 ```
 
+On Linux, including the ECS host, use the shell build entrypoint:
+
+```bash
+bash scripts/ecs/build-agent-service-edge-image.sh \
+  --image-name mozhi-agent-service-edge \
+  --image-tag local \
+  --platform linux/amd64
+```
+
+If the ECS host cannot reach Docker Hub, configure a Docker registry mirror on
+the host or pass a reachable Ubuntu mirror with `--base-image`.
+
 The test starts only one Docker container for the edge image. It also runs a
 host-side Python mock desktop health service. For tunnel verification, the
 script uses `docker exec` to start the image's bundled `frpc` inside that same
@@ -188,9 +200,10 @@ docker system df
 docker image prune
 ```
 
-Do not build the Docker image on ECS. Build locally, load or pull on ECS, and
-delete image archives after loading. Do not place PPTX files, Codex scratch
-workspaces, briefing archives, or Docker build cache on the ECS host.
+Prefer local builds for repeatability, but ECS-side builds are supported through
+`scripts/ecs/build-agent-service-edge-image.sh` when upload bandwidth or local
+Docker is inconvenient. Do not place PPTX files, Codex scratch workspaces, or
+briefing archives on the ECS host.
 
 Configure Docker log rotation on the ECS host if the service runs for long
 periods.
