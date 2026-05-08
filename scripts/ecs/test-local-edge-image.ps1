@@ -2,6 +2,7 @@ param(
     [string]$ImageName = "mozhi-agent-service-edge",
     [string]$ImageTag = "local",
     [string]$HealthUrl = "http://localhost:18080/health",
+    [string]$HttpsHealthUrl = "https://localhost:18443/health",
     [int]$MockServicePort = 18082,
     [int]$FrpsPort = 7000,
     [int]$RemoteHealthPort = 18081,
@@ -32,9 +33,19 @@ docker image inspect $image | Out-Null
 $env:EDGE_IMAGE = $image
 
 function Test-HealthOk {
-    param([string]$Url)
+    param(
+        [string]$Url,
+        [switch]$AllowInsecureTls
+    )
 
-    $response = Invoke-RestMethod -Uri $Url -TimeoutSec 3
+    if ($AllowInsecureTls) {
+        $raw = curl.exe -k -fsS --max-time 3 $Url
+        $response = $raw | ConvertFrom-Json
+    }
+    else {
+        $response = Invoke-RestMethod -Uri $Url -TimeoutSec 3
+    }
+
     if ($response.service -ne "mozhi-agent-service-mock-desktop" -or $response.status -ne "ok") {
         throw "Unexpected health response: $($response | ConvertTo-Json -Compress)"
     }
@@ -45,13 +56,14 @@ function Test-HealthOk {
 function Wait-ForHealthOk {
     param(
         [string]$Url,
-        [datetime]$Deadline
+        [datetime]$Deadline,
+        [switch]$AllowInsecureTls
     )
 
     $lastError = $null
     while ((Get-Date) -lt $Deadline) {
         try {
-            return Test-HealthOk -Url $Url
+            return Test-HealthOk -Url $Url -AllowInsecureTls:$AllowInsecureTls
         }
         catch {
             $lastError = $_.Exception.Message
@@ -107,6 +119,10 @@ remotePort = $RemoteHealthPort
 
     $response = Wait-ForHealthOk -Url $HealthUrl -Deadline $deadline
     Write-Host "Local edge health path passed: $HealthUrl"
+    $response | ConvertTo-Json -Depth 4
+
+    $response = Wait-ForHealthOk -Url $HttpsHealthUrl -Deadline $deadline -AllowInsecureTls
+    Write-Host "Local edge HTTPS health path passed: $HttpsHealthUrl"
     $response | ConvertTo-Json -Depth 4
 
     Write-Host "Stopping in-container frpc to verify tunnel failure is visible"
