@@ -1,0 +1,36 @@
+{
+  "archive_path": "briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC",
+  "artifacts": [
+    {
+      "artifact_id": "source",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-13-暗黑破坏神4-憎恨之王DLC/briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/source.md",
+      "kind": "source",
+      "logical_path": "briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/source.md",
+      "sha256": "180d1a174089dc3431e68cef13175a2b1fbadd61459fa3763578c147d6e2bdc2",
+      "size_bytes": 89,
+      "storage_backend": "git"
+    },
+    {
+      "artifact_id": "pptx-main",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-13-暗黑破坏神4-憎恨之王DLC/briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/brief.pptx",
+      "kind": "pptx",
+      "logical_path": "briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/brief.pptx",
+      "sha256": "0d712dd95221d45a829cac0a6e2a1f8a618f54f8575c1e3fdb5f594b07fadb96",
+      "size_bytes": 14636009,
+      "storage_backend": "git_lfs"
+    },
+    {
+      "artifact_id": "qa-summary",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-13-暗黑破坏神4-憎恨之王DLC/briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/qa-summary.md",
+      "kind": "qa_summary",
+      "logical_path": "briefings/2026/05/issue-13-暗黑破坏神4-憎恨之王DLC/qa-summary.md",
+      "sha256": "f499c2d4e67994faea40239c2d5c298b25d89765159c06d051cb55ca0e16ced4",
+      "size_bytes": 566,
+      "storage_backend": "git"
+    }
+  ],
+  "branch": "codex/briefing-issue-13-暗黑破坏神4-憎恨之王DLC",
+  "issue_number": 13,
+  "request_id": "brf_20260506235921_e5957d",
+  "title": "暗黑破坏神4 憎恨之王DLC"
+}
