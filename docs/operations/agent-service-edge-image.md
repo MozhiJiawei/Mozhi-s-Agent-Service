@@ -31,7 +31,8 @@ Desktop running:
 .\scripts\ecs\save-agent-service-edge-image.ps1
 ```
 
-On Linux, including the ECS host, use the shell build entrypoint:
+On a Linux host with Docker installed, build the same image directly on the
+server with the bash equivalent of the PowerShell build script:
 
 ```bash
 bash scripts/ecs/build-agent-service-edge-image.sh \
@@ -39,6 +40,10 @@ bash scripts/ecs/build-agent-service-edge-image.sh \
   --image-tag local \
   --platform linux/amd64
 ```
+
+This avoids building the image on Windows, saving it as a tar archive, and
+uploading that archive for every server-side iteration. Extra Docker build args
+can be passed with repeated `--build-arg KEY=VALUE` options.
 
 If the ECS host cannot reach Docker Hub, configure a Docker registry mirror on
 the host or pass a reachable Ubuntu mirror with `--base-image`.
