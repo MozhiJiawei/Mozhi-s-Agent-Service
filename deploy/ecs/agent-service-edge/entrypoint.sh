@@ -42,6 +42,13 @@ else
   export CADDY_HTTPS_SITE_ADDRESS="https://localhost"
 fi
 
+if [[ -n "${CADDY_DEFAULT_SNI:-}" ]]; then
+  export CADDY_DEFAULT_SNI
+else
+  export CADDY_DEFAULT_SNI="${CADDY_HTTPS_SITE_ADDRESS#https://}"
+  export CADDY_DEFAULT_SNI="${CADDY_DEFAULT_SNI#http://}"
+fi
+
 case "${CADDY_TLS_MODE}" in
   auto)
     export CADDY_TLS_DIRECTIVE=""
@@ -55,7 +62,7 @@ case "${CADDY_TLS_MODE}" in
     ;;
 esac
 
-envsubst '${CADDY_HTTP_SITE_ADDRESS} ${CADDY_HTTPS_SITE_ADDRESS} ${CADDY_TLS_DIRECTIVE} ${HEALTH_PROXY_PORT} ${DESKTOP_API_PROXY_PORT} ${API_MAX_BODY_SIZE} ${ALLOW_HTTP_API_HEADER_VALUE}' \
+envsubst '${CADDY_HTTP_SITE_ADDRESS} ${CADDY_HTTPS_SITE_ADDRESS} ${CADDY_DEFAULT_SNI} ${CADDY_TLS_DIRECTIVE} ${HEALTH_PROXY_PORT} ${DESKTOP_API_PROXY_PORT} ${API_MAX_BODY_SIZE} ${ALLOW_HTTP_API_HEADER_VALUE}' \
   < /etc/mozhi-edge/templates/Caddyfile.template \
   > /etc/mozhi-edge/generated/Caddyfile
 
@@ -67,7 +74,7 @@ echo "Starting frps on port ${FRP_BIND_PORT}" >&2
 frps -c /etc/mozhi-edge/generated/frps.toml &
 frps_pid="$!"
 
-echo "Starting Caddy HTTP at ${CADDY_HTTP_SITE_ADDRESS}, HTTPS at ${CADDY_HTTPS_SITE_ADDRESS} (${CADDY_TLS_MODE}); health proxy port ${HEALTH_PROXY_PORT}; desktop API proxy port ${DESKTOP_API_PROXY_PORT}" >&2
+echo "Starting Caddy HTTP at ${CADDY_HTTP_SITE_ADDRESS}, HTTPS at ${CADDY_HTTPS_SITE_ADDRESS} (${CADDY_TLS_MODE}); default SNI ${CADDY_DEFAULT_SNI}; health proxy port ${HEALTH_PROXY_PORT}; desktop API proxy port ${DESKTOP_API_PROXY_PORT}" >&2
 caddy run --config /etc/mozhi-edge/generated/Caddyfile --adapter caddyfile &
 caddy_pid="$!"
 

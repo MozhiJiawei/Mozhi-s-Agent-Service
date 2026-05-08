@@ -8,6 +8,7 @@ services:
       HEALTH_PROXY_PORT: 18081
       CADDY_HTTP_SITE_ADDRESS: ":80"
       CADDY_HTTPS_SITE_ADDRESS: "https://localhost"
+      CADDY_DEFAULT_SNI: "localhost"
       CADDY_TLS_MODE: "internal"
       ALLOW_HTTP_API: ${ALLOW_HTTP_API:-false}
       API_MAX_BODY_SIZE: ${API_MAX_BODY_SIZE:-1MB}

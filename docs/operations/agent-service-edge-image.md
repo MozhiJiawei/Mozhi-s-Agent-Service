@@ -68,6 +68,7 @@ docker run -d --name mozhi-agent-service-edge \
   -p 80:80 -p 443:443 -p 7000:7000 \
   -e CADDY_HTTP_SITE_ADDRESS=:80 \
   -e CADDY_HTTPS_SITE_ADDRESS=https://39.105.78.135 \
+  -e CADDY_DEFAULT_SNI=39.105.78.135 \
   -e CADDY_TLS_MODE=internal \
   -e FRP_TOKEN=<token> \
   -e FRP_BIND_PORT=7000 \
@@ -92,6 +93,7 @@ domain at the ECS host and switch to automatic public certificates:
 ```text
 CADDY_HTTP_SITE_ADDRESS=:80
 CADDY_HTTPS_SITE_ADDRESS=<domain>
+CADDY_DEFAULT_SNI=<domain>
 CADDY_TLS_MODE=auto
 ```
 
@@ -165,8 +167,9 @@ For a one-off public-IP HTTP E2E check before domain HTTPS is available, set
 through this path; use a short-lived validation token only.
 
 For a one-off public-IP HTTPS E2E check before domain certificates are
-available, keep `CADDY_HTTPS_SITE_ADDRESS=https://39.105.78.135` and
-`CADDY_TLS_MODE=internal`, then add `-k` to the curl command:
+available, keep `CADDY_HTTPS_SITE_ADDRESS=https://39.105.78.135`,
+`CADDY_DEFAULT_SNI=39.105.78.135`, and `CADDY_TLS_MODE=internal`, then add
+`-k` to the curl command:
 
 ```bash
 curl -k -i -sS -X POST "https://39.105.78.135/api/briefings" \
