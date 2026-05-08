@@ -7,3 +7,4 @@ Dockerfile text eol=lf
 *.ps1 text eol=crlf
 briefings/**/*.pptx filter=lfs diff=lfs merge=lfs -text
 
+briefings/**/*.pptx filter=lfs diff=lfs merge=lfs -text
