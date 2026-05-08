@@ -16,6 +16,7 @@ export HEALTH_PROXY_PORT="${HEALTH_PROXY_PORT:-18081}"
 export DESKTOP_API_PROXY_PORT="${DESKTOP_API_PROXY_PORT:-${HEALTH_PROXY_PORT}}"
 export API_MAX_BODY_SIZE="${API_MAX_BODY_SIZE:-1MB}"
 export ALLOW_HTTP_API="${ALLOW_HTTP_API:-false}"
+export CADDY_TLS_MODE="${CADDY_TLS_MODE:-auto}"
 
 if [[ "${ALLOW_HTTP_API}" == "true" ]]; then
   export ALLOW_HTTP_API_HEADER_VALUE="true"
@@ -23,15 +24,45 @@ else
   export ALLOW_HTTP_API_HEADER_VALUE="__disabled__"
 fi
 
-if [[ -n "${CADDY_SITE_ADDRESS:-}" ]]; then
-  export CADDY_SITE_ADDRESS
-elif [[ -n "${DOMAIN:-}" ]]; then
-  export CADDY_SITE_ADDRESS="${DOMAIN}"
+if [[ -n "${CADDY_HTTP_SITE_ADDRESS:-}" ]]; then
+  export CADDY_HTTP_SITE_ADDRESS
+elif [[ -n "${CADDY_SITE_ADDRESS:-}" && "${CADDY_SITE_ADDRESS}" == :* ]]; then
+  export CADDY_HTTP_SITE_ADDRESS="${CADDY_SITE_ADDRESS}"
 else
-  export CADDY_SITE_ADDRESS=":80"
+  export CADDY_HTTP_SITE_ADDRESS=":80"
 fi
 
-envsubst '${CADDY_SITE_ADDRESS} ${HEALTH_PROXY_PORT} ${DESKTOP_API_PROXY_PORT} ${API_MAX_BODY_SIZE} ${ALLOW_HTTP_API_HEADER_VALUE}' \
+if [[ -n "${CADDY_HTTPS_SITE_ADDRESS:-}" ]]; then
+  export CADDY_HTTPS_SITE_ADDRESS
+elif [[ -n "${DOMAIN:-}" ]]; then
+  export CADDY_HTTPS_SITE_ADDRESS="${DOMAIN}"
+elif [[ -n "${CADDY_SITE_ADDRESS:-}" && "${CADDY_SITE_ADDRESS}" != :* ]]; then
+  export CADDY_HTTPS_SITE_ADDRESS="${CADDY_SITE_ADDRESS}"
+else
+  export CADDY_HTTPS_SITE_ADDRESS="https://localhost"
+fi
+
+if [[ -n "${CADDY_DEFAULT_SNI:-}" ]]; then
+  export CADDY_DEFAULT_SNI
+else
+  export CADDY_DEFAULT_SNI="${CADDY_HTTPS_SITE_ADDRESS#https://}"
+  export CADDY_DEFAULT_SNI="${CADDY_DEFAULT_SNI#http://}"
+fi
+
+case "${CADDY_TLS_MODE}" in
+  auto)
+    export CADDY_TLS_DIRECTIVE=""
+    ;;
+  internal)
+    export CADDY_TLS_DIRECTIVE="	tls internal"
+    ;;
+  *)
+    echo "Invalid CADDY_TLS_MODE=${CADDY_TLS_MODE}; expected auto or internal" >&2
+    exit 64
+    ;;
+esac
+
+envsubst '${CADDY_HTTP_SITE_ADDRESS} ${CADDY_HTTPS_SITE_ADDRESS} ${CADDY_DEFAULT_SNI} ${CADDY_TLS_DIRECTIVE} ${HEALTH_PROXY_PORT} ${DESKTOP_API_PROXY_PORT} ${API_MAX_BODY_SIZE} ${ALLOW_HTTP_API_HEADER_VALUE}' \
   < /etc/mozhi-edge/templates/Caddyfile.template \
   > /etc/mozhi-edge/generated/Caddyfile
 
@@ -43,7 +74,7 @@ echo "Starting frps on port ${FRP_BIND_PORT}" >&2
 frps -c /etc/mozhi-edge/generated/frps.toml &
 frps_pid="$!"
 
-echo "Starting Caddy at ${CADDY_SITE_ADDRESS}; health proxy port ${HEALTH_PROXY_PORT}; desktop API proxy port ${DESKTOP_API_PROXY_PORT}" >&2
+echo "Starting Caddy HTTP at ${CADDY_HTTP_SITE_ADDRESS}, HTTPS at ${CADDY_HTTPS_SITE_ADDRESS} (${CADDY_TLS_MODE}); default SNI ${CADDY_DEFAULT_SNI}; health proxy port ${HEALTH_PROXY_PORT}; desktop API proxy port ${DESKTOP_API_PROXY_PORT}" >&2
 caddy run --config /etc/mozhi-edge/generated/Caddyfile --adapter caddyfile &
 caddy_pid="$!"
 

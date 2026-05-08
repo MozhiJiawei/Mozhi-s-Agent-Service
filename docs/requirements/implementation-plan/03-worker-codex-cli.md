@@ -68,7 +68,7 @@ briefing requests:
 - API secrets are loaded by `scripts/api/start-desktop-api.ps1` from
   `%USERPROFILE%\.mozhi-agent-service\api\api-token.txt` and
   `%USERPROFILE%\.mozhi-agent-service\api\github-token.txt`.
-- The default queued task store is `.tmp/api/tasks.jsonl`. The user-profile
+- The default queued task store is `.runtime/api/tasks.jsonl`. The user-profile
   secret directory must contain only secret files, not logs or task state.
 - Generated Issues use the default `agent-briefing` label, configurable through
   `MOZHI_ISSUE_LABEL`.
@@ -90,11 +90,12 @@ briefing requests:
   as generation failures.
 - The worker should write enough internal logs for diagnosis while keeping GitHub
   Issue comments concise.
-- The worker should read queued records from `.tmp/api/tasks.jsonl` unless
+- The worker should read queued records from `.runtime/api/tasks.jsonl` unless
   `MOZHI_TASK_STORE_PATH` overrides it.
 - The task record should keep the path to the isolated runtime directory and any
   candidate output files needed by later QA. Worker-owned state may use
-  additional files under `.tmp/worker/` as long as they are ignored by Git.
+additional durable files under `.runtime/worker/` as long as they are ignored by
+Git.
 - The worker should be restart-safe enough that an interrupted task can be
   diagnosed and retried manually, even if automated retry is deferred.
 - The implementation should inspect `git status` before any future commit step

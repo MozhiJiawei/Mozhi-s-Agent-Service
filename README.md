@@ -55,19 +55,40 @@ The first implementation stage initializes the repository and records the
 aligned requirements for the briefing generation API. API and worker code will
 be added in later implementation stages.
 
-## Runtime Files And Secrets
+## Runtime Files, Scratch Files, And Secrets
 
-Agents and operators must keep secret material separate from runtime scratch
-files:
+Agents and operators must keep secret material, durable runtime state, and
+disposable scratch files separated:
 
 - Store API secrets only under
   `%USERPROFILE%\.mozhi-agent-service\api\`.
-- Store local runtime scratch files, logs, temporary task stores, and E2E
-  outputs under this repository's `.tmp/` directory.
+- Store service-owned durable runtime state under this repository's `.runtime/`
+  directory by default. This includes the API task queue, Worker state files,
+  API/Worker logs, and future monitor snapshots needed to resume or audit
+  in-flight work.
+- Store disposable scratch under this repository's `.tmp/` directory. This
+  includes test-generated outputs, one-off local verification artifacts, and
+  other files that are safe to delete at any time.
 - Do not put logs, JSONL task stores, generated source snapshots, or test
   outputs in `%USERPROFILE%\.mozhi-agent-service\api\`.
-- Do not commit `.tmp/` contents or any files from
+- Do not commit `.runtime/`, `.tmp/`, or any files from
   `%USERPROFILE%\.mozhi-agent-service\api\`.
+- Existing local files can be migrated with:
+  `Move-Item .tmp\api .runtime\api` and
+  `Move-Item .tmp\worker .runtime\worker`, after stopping the API and Worker.
+
+## Local Monitoring
+
+Operators can open the desktop-only monitoring dashboard at
+`http://127.0.0.1:8080/monitor` when the local API process is running.
+Start it with `.\scripts\api\start-desktop-api.ps1 -Profile A`. The
+FRP-backed edge entrypoint uses profile `B` on `0.0.0.0:18082`.
+
+The monitor is read-only and local-only. It summarizes queued tasks, worker
+state, recent terminal jobs, archive metadata, and local health checks without
+calling GitHub or mutating task state. See
+`docs/operations/monitoring-dashboard.md` for details and ECS exposure
+guidance.
 
 Current desktop API secret files:
 
@@ -76,3 +97,19 @@ Current desktop API secret files:
   api-token.txt
   github-token.txt
 ```
+
+## Linux Docker Build
+
+The repository currently ships a Docker image for the ECS edge gateway
+(`mozhi-agent-service-edge`). On Linux servers, build it from the repository
+root with:
+
+```bash
+bash scripts/ecs/build-agent-service-edge-image.sh --image-tag local
+```
+
+This is the Linux counterpart to
+`scripts/ecs/build-agent-service-edge-image.ps1` and avoids repeatedly
+transferring image tar archives during server-side iteration. API and worker
+Docker targets are reserved for future Dockerfiles; the current runtime
+architecture keeps them outside the edge image.

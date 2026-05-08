@@ -1,0 +1,36 @@
+{
+  "archive_path": "briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度",
+  "artifacts": [
+    {
+      "artifact_id": "source",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-14-暗黑3最新赛季受欢迎程度/briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/source.md",
+      "kind": "source",
+      "logical_path": "briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/source.md",
+      "sha256": "2ef78d1f950af51e705d1ec3c7ca55779a38b6f122f9c939f6e50805e1f2bf0a",
+      "size_bytes": 103,
+      "storage_backend": "git"
+    },
+    {
+      "artifact_id": "pptx-main",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-14-暗黑3最新赛季受欢迎程度/briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/brief.pptx",
+      "kind": "pptx",
+      "logical_path": "briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/brief.pptx",
+      "sha256": "ffd176fe4cad5650d161d3bb593d785066546d6dab6ef5e47662deb640529ea8",
+      "size_bytes": 464099,
+      "storage_backend": "git_lfs"
+    },
+    {
+      "artifact_id": "qa-summary",
+      "download_url": "https://github.com/MozhiJiawei/Mozhi-s-Agent-Service/blob/codex/briefing-issue-14-暗黑3最新赛季受欢迎程度/briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/qa-summary.md",
+      "kind": "qa_summary",
+      "logical_path": "briefings/2026/05/issue-14-暗黑3最新赛季受欢迎程度/qa-summary.md",
+      "sha256": "c6d00810f54cdb3b814845c1c536f126b9a3f43dac0bd8bc6c8fc1dea523c5b2",
+      "size_bytes": 640,
+      "storage_backend": "git"
+    }
+  ],
+  "branch": "codex/briefing-issue-14-暗黑3最新赛季受欢迎程度",
+  "issue_number": 14,
+  "request_id": "brf_20260507015220_22b66d",
+  "title": "暗黑3最新赛季受欢迎程度"
+}

@@ -32,13 +32,17 @@ Optional settings:
 ```powershell
 $env:GITHUB_REPOSITORY = "MozhiJiawei/Mozhi-s-Agent-Service"
 $env:MOZHI_ISSUE_LABEL = "agent-briefing"
-$env:MOZHI_TASK_STORE_PATH = "<repo>\.tmp\api\tasks.jsonl"
+$env:MOZHI_TASK_STORE_PATH = "<repo>\.runtime\api\tasks.jsonl"
 $env:MOZHI_MAX_SOURCE_BYTES = "1048576"
 ```
 
-Runtime logs, temporary JSONL task stores, and E2E outputs belong under the
-repository `.tmp\api\` directory. `%USERPROFILE%\.mozhi-agent-service\api\`
+Durable runtime logs and JSONL task stores belong under the repository
+`.runtime\api\` directory by default. `%USERPROFILE%\.mozhi-agent-service\api\`
 should contain secret files only.
+
+Disposable E2E outputs and one-off verification artifacts should stay under
+`.tmp\`. It must be safe for operators to delete `.tmp\` without losing queued
+tasks or logs needed for diagnosis.
 
 ## Run
 
@@ -47,14 +51,22 @@ cd ..\..
 .\scripts\api\start-desktop-api.ps1
 ```
 
-The service listens on `127.0.0.1:8080`.
+This starts profile `A -- 开发环境`. The service listens on
+`127.0.0.1:8080`.
 
-For the current FRP-backed ECS route, run it on the tunnel target port:
+For the current FRP-backed ECS route, start profile `B -- 边缘接入环境`:
 
 ```powershell
-$env:MOZHI_API_HOST = "0.0.0.0"
-$env:MOZHI_API_PORT = "18082"
-.\scripts\api\start-desktop-api.ps1
+.\scripts\api\start-desktop-api.ps1 -Profile B
+```
+
+Profile `B` listens on `0.0.0.0:18082`. The ECS/FRP route should target this
+port; profile `A` remains a local development endpoint.
+
+To restart the Edge API from Explorer, double-click:
+
+```text
+scripts\api\restart-edge-api.cmd
 ```
 
 ## Submit A Briefing

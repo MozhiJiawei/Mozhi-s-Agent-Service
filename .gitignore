@@ -1,4 +1,5 @@
 dist/
+AgentWorkspace/
 *.tar
 *.tar.gz
 *.tgz
@@ -7,6 +8,7 @@ dist/
 .env.*
 !.env.example
 **/.tmp/
+**/.runtime/
 **/tmp/
 **/__pycache__/
 *.py[cod]

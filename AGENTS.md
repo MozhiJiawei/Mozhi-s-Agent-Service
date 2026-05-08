@@ -8,6 +8,7 @@ repository must keep service code, worker code, and archived outputs separated.
 Before changing code, directory structure, or repository conventions, read:
 
 - `README.md`
+- `docs/architecture-design.md`
 - `docs/requirements/briefing-generation-api.md`
 
 ## Directory Boundaries
